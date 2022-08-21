@@ -3,6 +3,7 @@
 Input :: #import "Input";
 Simp :: #import "Simp";
 #import "Math";
+#import "X11";
 
 window_width : s32 = 1920;
 window_height : s32 = 1080;
@@ -24,6 +25,10 @@ Rect :: struct {
     w, h: float;
 }
 
+cursor_hand: Cursor;
+cursor_arrow: Cursor;
+cursor_right_side: Cursor;
+
 main :: () {
     the_window = create_window(window_width, window_height, "MY POSTMAN", background_color_rgb =  float.[.55,.01,.9]);
     window_width, window_height = Simp.get_render_dimensions(the_window);
@@ -33,6 +38,10 @@ main :: () {
     // init font
     the_font = Simp.get_font_at_size(".", "OpenSans-BoldItalic.ttf", 40);
     assert(the_font != null);
+
+    cursor_hand = XCreateFontCursor(x_global_display, 60);
+    cursor_arrow = XCreateFontCursor(x_global_display, 2);
+    cursor_right_side = XCreateFontCursor(x_global_display, 96);
 
     quit : bool;
     while !quit {
@@ -91,6 +100,11 @@ draw_one_frame :: () {
     button_color := color_red;
     button := make_rect(120, 40, xx x, xx y);
 
+    if mouse_pointer_is_within(button) {
+        XDefineCursor(x_global_display, the_window, cursor_hand);
+    } else {
+        XDefineCursor(x_global_display, the_window, cursor_arrow);
+    }
 
     // Check if mouse click is over button
     if left_click && mouse_pointer_is_within(button) {
@@ -110,6 +124,7 @@ draw_one_frame :: () {
     // Check if mouse pointer is within move_bar
     if mouse_pointer_is_within(move_bar) {
         move_bar_color = color_red;
+        XDefineCursor(x_global_display, the_window, cursor_right_side);
     }
     set_points(move_bar, move_bar_color);
 
