@@ -5,19 +5,9 @@ Simp :: #import "Simp";
 #import "Math";
 #import "X11";
 
+// Window
 window_width : s32 = 1920;
 window_height : s32 = 1080;
-
-mouse_pointer: Vector2;
-
-color_white : Vector4 = .{1, 1, 1, 1};
-color_red : Vector4 = .{1, 0, 0, 1};
-color_blue : Vector4 = .{0, 0, 1, 1};
-
-color_1 : Vector4 = .{0.2, 0.3, 0.5, 1};
-color_2 : Vector4 = .{0.2, 0.4, 0.4, 1};
-
-the_font : *Simp.Dynamic_Font;
 the_window : Window_Type; 
 
 Rect :: struct {
@@ -25,9 +15,26 @@ Rect :: struct {
     w, h: float;
 }
 
-cursor_hand: Cursor;
-cursor_arrow: Cursor;
-cursor_right_side: Cursor;
+// Colors
+color_white : Vector4 = .{1, 1, 1, 1};
+color_red : Vector4 = .{1, 0, 0, 1};
+color_blue : Vector4 = .{0, 0, 1, 1};
+color_1 : Vector4 = .{0.2, 0.3, 0.5, 1};
+color_2 : Vector4 = .{0.2, 0.4, 0.4, 1};
+
+the_font : *Simp.Dynamic_Font;
+
+// Pointers
+mouse_pointer: Vector2;
+NUM_POINTERS :: #run enum_highest_value(Pointer_Image)+1;
+Pointer_Image :: enum u16 {
+    ARROW :: 0;  // Normal arrow for pointing at stuff, or whatever.
+    HAND  :: 1; 
+    SLIDE :: 2;
+
+}
+pointers: [NUM_POINTERS] Cursor;
+
 
 main :: () {
     the_window = create_window(window_width, window_height, "MY POSTMAN", background_color_rgb =  float.[.55,.01,.9]);
@@ -35,13 +42,8 @@ main :: () {
 
     Simp.set_render_target(the_window);
 
-    // init font
-    the_font = Simp.get_font_at_size(".", "OpenSans-BoldItalic.ttf", 40);
-    assert(the_font != null);
-
-    cursor_hand = XCreateFontCursor(x_global_display, 60);
-    cursor_arrow = XCreateFontCursor(x_global_display, 2);
-    cursor_right_side = XCreateFontCursor(x_global_display, 96);
+    init_font();
+    init_pointer_images();
 
     quit : bool;
     while !quit {
@@ -101,9 +103,9 @@ draw_one_frame :: () {
     button := make_rect(120, 40, xx x, xx y);
 
     if mouse_pointer_is_within(button) {
-        XDefineCursor(x_global_display, the_window, cursor_hand);
+        set_pointer_image(Pointer_Image.HAND);
     } else {
-        XDefineCursor(x_global_display, the_window, cursor_arrow);
+        set_pointer_image(Pointer_Image.ARROW);
     }
 
     // Check if mouse click is over button
@@ -124,7 +126,7 @@ draw_one_frame :: () {
     // Check if mouse pointer is within move_bar
     if mouse_pointer_is_within(move_bar) {
         move_bar_color = color_red;
-        XDefineCursor(x_global_display, the_window, cursor_right_side);
+        set_pointer_image(Pointer_Image.SLIDE);
     }
     set_points(move_bar, move_bar_color);
 
@@ -133,6 +135,11 @@ draw_one_frame :: () {
 
     // Simp.immediate_flush();
     Simp.swap_buffers(the_window);
+}
+
+init_font :: () {
+    the_font = Simp.get_font_at_size(".", "OpenSans-BoldItalic.ttf", 40);
+    assert(the_font != null);
 }
 
 make_rect :: (width: float, height: float, x: float, y: float) -> Rect{
@@ -151,6 +158,23 @@ set_points :: (r: Rect, color: Vector4) {
     Simp.immediate_quad(x, y, x + w, y + h, color);
 }
 
+init_pointer_images :: () {
+    using Pointer_Image;
+
+    pointers[HAND] = XCreateFontCursor(x_global_display, 60);
+    pointers[ARROW] = XCreateFontCursor(x_global_display, 2);
+    pointers[SLIDE]= XCreateFontCursor(x_global_display, 96);
+}
+
+set_pointer_image :: (image: Pointer_Image) {
+    // if !initted_pointers  init_pointers();
+
+    if (image >= 0) && (image <= cast(Pointer_Image) NUM_POINTERS) {
+        XDefineCursor(x_global_display, the_window, pointers[image]);
+    } else {
+        log_error("Invalid pointer index %\n", image);
+    }
+}
 
 update_mouse_pointer :: () {
     x, y := get_mouse_pointer_position(the_window, true);
