@@ -10,6 +10,8 @@ window_width : s32 = 1920;
 window_height : s32 = 1080;
 the_window : Window_Type; 
 
+screen : Rect;
+
 Rect :: struct {
     x, y: float;
     w, h: float;
@@ -19,8 +21,10 @@ Rect :: struct {
 color_white : Vector4 = .{1, 1, 1, 1};
 color_red : Vector4 = .{1, 0, 0, 1};
 color_blue : Vector4 = .{0, 0, 1, 1};
-color_1 : Vector4 = .{0.2, 0.3, 0.5, 1};
-color_2 : Vector4 = .{0.2, 0.4, 0.4, 1};
+color_1 : Vector4 = .{0.33, 0.37, 0.41, 1};
+color_2 : Vector4 = .{0.13, 0.15, 0.18, 1};
+color_3 : Vector4 = .{0.176, 0.2, 0.23, 1};
+color_button : Vector4 = .{0, 0.3, 0.4, 1};
 
 the_font : *Simp.Dynamic_Font;
 
@@ -44,9 +48,16 @@ main :: () {
 
     init_font();
     init_pointer_images();
+    set_pointer_image(Pointer_Image.ARROW);
 
     quit : bool;
     while !quit {
+        for Input.get_window_resizes() {
+            Simp.update_window(it.window);
+            window_width = it.width;
+            window_height = it.height;
+        }
+
         Input.update_window_events();
 
         for Input.events_this_frame {
@@ -77,58 +88,38 @@ draw_one_frame :: () {
     // Events
     left_click := Input.input_button_states[Input.Key_Code.MOUSE_BUTTON_LEFT];
 
-    // Simp.immediate_begin();
-    Simp.set_shader_for_color();
-
-    rect := make_rect(xx window_width, xx window_height, 0, 0);
-    set_points(rect, color_1);
-
-     // Draw side bar
-    w := window_width / 4;
-    side_bar := make_rect(xx w, xx window_height, 0, 0);
-    set_points(side_bar, color_2);
-
-    // Draw top bar
-    w = 3 * window_width / 4;
-    h := window_height / 6;
-    x := window_width / 4;
-    y := 5 * window_height / 6;
-    top_bar := make_rect(xx w, xx h, xx x, xx y);
-    set_points(top_bar, color_blue);
-
-    // Draw button
-    x = window_width - 220;
-    y = window_height - 150;
-    button_color := color_red;
-    button := make_rect(120, 40, xx x, xx y);
-
-    if mouse_pointer_is_within(button) {
-        set_pointer_image(Pointer_Image.HAND);
-    } else {
-        set_pointer_image(Pointer_Image.ARROW);
-    }
-
-    // Check if mouse click is over button
-    if left_click && mouse_pointer_is_within(button) {
-        button_color = color_white;
-    }
-    set_points(button, button_color);
-
-    // Draw move bar
-    w = 4;
-    x = window_width / 4 - 2;
-    move_bar := make_rect(xx w, xx window_height, xx x, 0);
-    move_bar_color := color_white;
-
     // Check mouse position
     update_mouse_pointer();
 
-    // Check if mouse pointer is within move_bar
+    // Simp.immediate_begin();
+    Simp.set_shader_for_color();
+
+    side_bar, top_bar, move_bar, bar, rect : Rect;
+    screen = make_rect(xx window_width, xx window_height, 0, 0);
+    rect, side_bar = cut_left(xx (window_width / 4), screen);
+    rect, top_bar = cut_top(xx (window_height / 6), rect);
+
+    set_points(rect, color_1);
+    set_points(side_bar, color_2);
+    set_points(top_bar, color_3);
+
+    // Draw move bar
+    bar, move_bar = cut_right(5, side_bar);
     if mouse_pointer_is_within(move_bar) {
-        move_bar_color = color_red;
-        set_pointer_image(Pointer_Image.SLIDE);
+        set_points(move_bar, color_button);
     }
-    set_points(move_bar, move_bar_color);
+
+    // Draw button
+    button := draw_button(xx (top_bar.x + 0.9 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
+
+    // Check mouse pointer image
+    if mouse_pointer_is_within(button) {
+        set_pointer_image(Pointer_Image.HAND);
+    } else if mouse_pointer_is_within(move_bar) {
+        set_pointer_image(Pointer_Image.SLIDE);
+    } else {
+        set_pointer_image(Pointer_Image.ARROW);
+    }
 
     text := sprint("Mouse position is: %", mouse_pointer);
     Simp.draw_text(the_font, xx top_bar.x, xx top_bar.y, text);
@@ -138,7 +129,7 @@ draw_one_frame :: () {
 }
 
 init_font :: () {
-    the_font = Simp.get_font_at_size(".", "OpenSans-BoldItalic.ttf", 40);
+    the_font = Simp.get_font_at_size(".", "OpenSans-BoldItalic.ttf", 16);
     assert(the_font != null);
 }
 
@@ -191,3 +182,55 @@ mouse_pointer_is_within :: (rect: Rect) -> bool {
     return point_within(mouse_pointer, rect);
 }
 
+
+draw_button :: (x: float, y: float, width: float, height: float, color: Vector4, text: string) -> Rect { 
+    left_click := Input.input_button_states[Input.Key_Code.MOUSE_BUTTON_LEFT];
+    button := make_rect(width, height, x, y);
+    
+    // Check if mouse click is over button
+    if left_click && mouse_pointer_is_within(button) {
+        set_points(button, color_white);
+    } else {
+        set_points(button, color);
+    }
+
+    // Label
+    text_width := Simp.prepare_text(the_font, text);
+    Simp.draw_text(the_font, xx (x + (width / 2) - text_width/2), xx (y + (height / 2) - 5), text);    
+
+    return button;
+}
+
+
+cut_left :: (cut: float, rect: Rect) -> (remainder: Rect, left: Rect) {
+    remainder := rect;
+    remainder.x += cut;
+    remainder.w -= cut;
+
+    left := rect;
+    left.w = cut;
+
+    return remainder, left;
+}
+
+cut_right :: (cut: float, rect: Rect) -> (remainder: Rect, right: Rect) {
+    remainder := rect;
+    remainder.w -= cut;
+
+    right := rect;
+    right.w = cut;
+    right.x = rect.w - cut;
+
+    return remainder, right;
+}
+
+cut_top :: (cut: float, rect: Rect) -> (remainder: Rect, top: Rect) {
+    remainder := rect;
+    remainder.h -= cut;
+
+    top := rect;
+    top.h = cut;
+    top.y = rect.h - cut;
+
+    return remainder, top;
+}
