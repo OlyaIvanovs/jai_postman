@@ -39,6 +39,8 @@ Pointer_Image :: enum u16 {
 }
 pointers: [NUM_POINTERS] Cursor;
 
+side_bar_w : float;
+move_bar_grab : bool;
 
 main :: () {
     the_window = create_window(window_width, window_height, "MY POSTMAN", background_color_rgb =  float.[.55,.01,.9]);
@@ -49,6 +51,8 @@ main :: () {
     init_font();
     init_pointer_images();
     set_pointer_image(Pointer_Image.ARROW);
+    side_bar_w = xx (window_width / 5);
+    
 
     quit : bool;
     while !quit {
@@ -96,7 +100,7 @@ draw_one_frame :: () {
 
     side_bar, top_bar, move_bar, bar, rect : Rect;
     screen = make_rect(xx window_width, xx window_height, 0, 0);
-    rect, side_bar = cut_left(xx (window_width / 4), screen);
+    rect, side_bar = cut_left(side_bar_w, screen);
     rect, top_bar = cut_top(xx (window_height / 6), rect);
 
     set_points(rect, color_1);
@@ -105,8 +109,19 @@ draw_one_frame :: () {
 
     // Draw move bar
     bar, move_bar = cut_right(5, side_bar);
-    if mouse_pointer_is_within(move_bar) {
+    move_bar.x += 2; 
+    move_bar_hover := expand_x(2, move_bar);
+    if mouse_pointer_is_within(move_bar_hover) {
         set_points(move_bar, color_button);
+        if left_click == .DOWN  {
+            move_bar_grab = true;
+        }
+    }
+
+    if left_click == .DOWN && move_bar_grab {
+        side_bar_w = mouse_pointer.x;
+    } else {
+        move_bar_grab = false;
     }
 
     // Draw button
@@ -233,4 +248,13 @@ cut_top :: (cut: float, rect: Rect) -> (remainder: Rect, top: Rect) {
     top.y = rect.h - cut;
 
     return remainder, top;
+}
+
+
+expand_x :: (expand: float, rect: Rect) -> (r: Rect) {
+    r := rect;
+    r.x -= expand;
+    r.w += expand * 2;
+
+    return rect;
 }
