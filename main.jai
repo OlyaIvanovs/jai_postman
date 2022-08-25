@@ -32,15 +32,24 @@ the_font : *Simp.Dynamic_Font;
 mouse_pointer: Vector2;
 NUM_POINTERS :: #run enum_highest_value(Pointer_Image)+1;
 Pointer_Image :: enum u16 {
-    ARROW :: 0;  // Normal arrow for pointing at stuff, or whatever.
-    HAND  :: 1; 
-    SLIDE :: 2;
+    ARROW;
+    HAND;
+    SLIDE;
 
 }
 pointers: [NUM_POINTERS] Cursor;
 
+Key_State :: enum u16 {
+    REALISED;
+    PRESSED;
+    UNTOUCHED;
+
+}
+
 side_bar_w : float;
 move_bar_grab : bool;
+key_pressed : Key_State;
+
 
 main :: () {
     the_window = create_window(window_width, window_height, "MY POSTMAN", background_color_rgb =  float.[.55,.01,.9]);
@@ -56,6 +65,7 @@ main :: () {
 
     quit : bool;
     while !quit {
+        key_pressed = .UNTOUCHED;
         for Input.get_window_resizes() {
             Simp.update_window(it.window);
             window_width = it.width;
@@ -71,8 +81,13 @@ main :: () {
 
             if it.type == .KEYBOARD {
                 print("n is %\n", it);
-                if it.key_pressed == 0 continue;
-
+                if it.key_pressed == 0 {
+                    key_pressed = .REALISED;
+                    continue;
+                }
+                if it.key_pressed == 1 {
+                    key_pressed = .PRESSED;
+                }
                 if it.key_code == .ESCAPE {
                     quit = true;
                 }
@@ -113,14 +128,15 @@ draw_one_frame :: () {
     move_bar_hover := expand_x(2, move_bar);
     if mouse_pointer_is_within(move_bar_hover) {
         set_points(move_bar, color_button);
-        if left_click == .DOWN  {
+        if left_click && key_pressed == .PRESSED {
             move_bar_grab = true;
         }
     }
 
-    if left_click == .DOWN && move_bar_grab {
+    if left_click && move_bar_grab {
         side_bar_w = mouse_pointer.x;
-    } else {
+    }
+    if key_pressed == .REALISED && move_bar_grab {
         move_bar_grab = false;
     }
 
