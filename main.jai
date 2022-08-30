@@ -2,6 +2,7 @@
 #import "Window_Creation";
 Input :: #import "Input";
 Simp :: #import "Simp";
+Unicode :: #import "Unicode";
 #import "Math";
 #import "X11";
 
@@ -25,6 +26,7 @@ color_1 : Vector4 = .{0.33, 0.37, 0.41, 1};
 color_2 : Vector4 = .{0.13, 0.15, 0.18, 1};
 color_3 : Vector4 = .{0.176, 0.2, 0.23, 1};
 color_button : Vector4 = .{0, 0.3, 0.4, 1};
+color_input : Vector4 = .{0.59, 0.59, 0.62, 1};
 
 the_font : *Simp.Dynamic_Font;
 
@@ -35,7 +37,7 @@ Pointer_Image :: enum u16 {
     ARROW;
     HAND;
     SLIDE;
-
+    CURSOR;
 }
 pointers: [NUM_POINTERS] Cursor;
 
@@ -49,9 +51,11 @@ Key_State :: enum u16 {
 side_bar_w : float;
 move_bar_grab : bool;
 key_pressed : Key_State;
-
+key: string;
+character_utf32_to_utf8 :: Unicode.character_utf32_to_utf8;
 
 main :: () {
+    text_edit: [..] u8;
     the_window = create_window(window_width, window_height, "MY POSTMAN", background_color_rgb =  float.[.55,.01,.9]);
     window_width, window_height = Simp.get_render_dimensions(the_window);
 
@@ -79,6 +83,13 @@ main :: () {
                 quit = true;
             }
 
+            if it.type == .TEXT_INPUT {
+                value := it.utf32;
+                key = character_utf32_to_utf8(value);
+                // for 0..str.count-1 {
+                //     array_add(*text_edit, str[it]);
+                // }
+            }
             if it.type == .KEYBOARD {
                 print("n is %\n", it);
                 if it.key_pressed == 0 {
@@ -143,17 +154,25 @@ draw_one_frame :: () {
     // Draw button
     button := draw_button(xx (top_bar.x + 0.9 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
 
+     // Draw text input
+    text_input := draw_text_input(xx (top_bar.x + 0.4 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 520, 40, color_input);  
+
     // Check mouse pointer image
     if mouse_pointer_is_within(button) {
         set_pointer_image(Pointer_Image.HAND);
     } else if mouse_pointer_is_within(move_bar) {
         set_pointer_image(Pointer_Image.SLIDE);
+    } else if mouse_pointer_is_within(text_input) {
+        set_pointer_image(Pointer_Image.CURSOR);
     } else {
         set_pointer_image(Pointer_Image.ARROW);
-    }
+    }  
 
     text := sprint("Mouse position is: %", mouse_pointer);
     Simp.draw_text(the_font, xx top_bar.x, xx top_bar.y, text);
+
+    text = sprint("Key pressed: %", xx key);
+    Simp.draw_text(the_font, xx (0.5*top_bar.x), xx top_bar.y, text);
 
     // Simp.immediate_flush();
     Simp.swap_buffers(the_window);
@@ -177,6 +196,7 @@ make_rect :: (width: float, height: float, x: float, y: float) -> Rect{
 
 set_points :: (r: Rect, color: Vector4) {
     using r;
+    Simp.set_shader_for_color();
     Simp.immediate_quad(x, y, x + w, y + h, color);
 }
 
@@ -186,6 +206,7 @@ init_pointer_images :: () {
     pointers[HAND] = XCreateFontCursor(x_global_display, 60);
     pointers[ARROW] = XCreateFontCursor(x_global_display, 2);
     pointers[SLIDE]= XCreateFontCursor(x_global_display, 96);
+    pointers[CURSOR]= XCreateFontCursor(x_global_display, 152);
 }
 
 set_pointer_image :: (image: Pointer_Image) {
@@ -231,6 +252,21 @@ draw_button :: (x: float, y: float, width: float, height: float, color: Vector4,
 
     return button;
 }
+
+draw_text_input :: (x: float, y: float, width: float, height: float, color: Vector4) -> Rect { 
+    left_click := Input.input_button_states[Input.Key_Code.MOUSE_BUTTON_LEFT];
+    input := make_rect(width, height, x, y);
+    
+    // Check if mouse click is over input
+    if left_click && mouse_pointer_is_within(input) {
+        set_points(input, color_white);
+    } else {
+        set_points(input, color);
+    }  
+
+    return input;
+}
+
 
 
 cut_left :: (cut: float, rect: Rect) -> (remainder: Rect, left: Rect) {
