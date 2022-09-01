@@ -1,0 +1,1 @@
+jai -import_dir modules main.jai && ./main

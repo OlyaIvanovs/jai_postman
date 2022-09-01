@@ -1,10 +1,14 @@
 #import "Basic";
 #import "Window_Creation";
-Input :: #import "Input";
-Simp :: #import "Simp";
-Unicode :: #import "Unicode";
 #import "Math";
 #import "X11";
+Input :: #import "Input";
+Simp :: #import "Simp";
+
+#load "layout.jai";
+#load "init.jai";
+#load "draw.jai";
+#load "unicode.jai";
 
 // Window
 window_width : s32 = 1920;
@@ -51,11 +55,10 @@ Key_State :: enum u16 {
 side_bar_w : float;
 move_bar_grab : bool;
 key_pressed : Key_State;
-key: string;
-character_utf32_to_utf8 :: Unicode.character_utf32_to_utf8;
+text_input: [..] u8;
+input_focus : bool;
 
 main :: () {
-    text_edit: [..] u8;
     the_window = create_window(window_width, window_height, "MY POSTMAN", background_color_rgb =  float.[.55,.01,.9]);
     window_width, window_height = Simp.get_render_dimensions(the_window);
 
@@ -77,18 +80,18 @@ main :: () {
         }
 
         Input.update_window_events();
-
         for Input.events_this_frame {
             if it.type == .QUIT {
                 quit = true;
             }
 
-            if it.type == .TEXT_INPUT {
-                value := it.utf32;
-                key = character_utf32_to_utf8(value);
-                // for 0..str.count-1 {
-                //     array_add(*text_edit, str[it]);
-                // }
+            if it.type == .TEXT_INPUT && input_focus {
+                print("n is %\n", it);
+                key, count := key_utf32_to_utf8(it.utf32);  
+                print("kez %", key);
+                for 0..count-1 {
+                    array_add(*text_input, key[it]);
+                }
             }
             if it.type == .KEYBOARD {
                 print("n is %\n", it);
@@ -155,58 +158,41 @@ draw_one_frame :: () {
     button := draw_button(xx (top_bar.x + 0.9 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
 
      // Draw text input
-    text_input := draw_text_input(xx (top_bar.x + 0.4 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 520, 40, color_input);  
+    c : Vector4;
+    if input_focus {
+        c = color_white;
+    } else {
+        c = color_input;
+    }
+    text_input_rect := draw_text_input(xx (top_bar.x + 0.4 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 520, 40, c);  
 
     // Check mouse pointer image
+    input_focus = false;
     if mouse_pointer_is_within(button) {
         set_pointer_image(Pointer_Image.HAND);
     } else if mouse_pointer_is_within(move_bar) {
         set_pointer_image(Pointer_Image.SLIDE);
-    } else if mouse_pointer_is_within(text_input) {
+    } else if mouse_pointer_is_within(text_input_rect) {
+        input_focus = true;
         set_pointer_image(Pointer_Image.CURSOR);
     } else {
         set_pointer_image(Pointer_Image.ARROW);
     }  
 
-    text := sprint("Mouse position is: %", mouse_pointer);
-    Simp.draw_text(the_font, xx top_bar.x, xx top_bar.y, text);
+    text := tprint("Mouse position is: %", mouse_pointer);
+    Simp.draw_text(the_font, xx top_bar.x, xx (0.5*top_bar.y), text);
 
-    text = sprint("Key pressed: %", xx key);
-    Simp.draw_text(the_font, xx (0.5*top_bar.x), xx top_bar.y, text);
+    text = tprint("%", to_string(text_input));
+    Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, text, color_button);
 
     // Simp.immediate_flush();
     Simp.swap_buffers(the_window);
-}
-
-init_font :: () {
-    the_font = Simp.get_font_at_size(".", "OpenSans-BoldItalic.ttf", 16);
-    assert(the_font != null);
-}
-
-make_rect :: (width: float, height: float, x: float, y: float) -> Rect{
-    rect : Rect;
-
-    rect.w = width;
-    rect.h = height;
-    rect.x = x;
-    rect.y = y;
-
-    return rect;
 }
 
 set_points :: (r: Rect, color: Vector4) {
     using r;
     Simp.set_shader_for_color();
     Simp.immediate_quad(x, y, x + w, y + h, color);
-}
-
-init_pointer_images :: () {
-    using Pointer_Image;
-
-    pointers[HAND] = XCreateFontCursor(x_global_display, 60);
-    pointers[ARROW] = XCreateFontCursor(x_global_display, 2);
-    pointers[SLIDE]= XCreateFontCursor(x_global_display, 96);
-    pointers[CURSOR]= XCreateFontCursor(x_global_display, 152);
 }
 
 set_pointer_image :: (image: Pointer_Image) {
@@ -232,81 +218,4 @@ point_within :: (p: Vector2, r: Rect) -> bool {
 
 mouse_pointer_is_within :: (rect: Rect) -> bool {
     return point_within(mouse_pointer, rect);
-}
-
-
-draw_button :: (x: float, y: float, width: float, height: float, color: Vector4, text: string) -> Rect { 
-    left_click := Input.input_button_states[Input.Key_Code.MOUSE_BUTTON_LEFT];
-    button := make_rect(width, height, x, y);
-    
-    // Check if mouse click is over button
-    if left_click && mouse_pointer_is_within(button) {
-        set_points(button, color_white);
-    } else {
-        set_points(button, color);
-    }
-
-    // Label
-    text_width := Simp.prepare_text(the_font, text);
-    Simp.draw_text(the_font, xx (x + (width / 2) - text_width/2), xx (y + (height / 2) - 5), text);    
-
-    return button;
-}
-
-draw_text_input :: (x: float, y: float, width: float, height: float, color: Vector4) -> Rect { 
-    left_click := Input.input_button_states[Input.Key_Code.MOUSE_BUTTON_LEFT];
-    input := make_rect(width, height, x, y);
-    
-    // Check if mouse click is over input
-    if left_click && mouse_pointer_is_within(input) {
-        set_points(input, color_white);
-    } else {
-        set_points(input, color);
-    }  
-
-    return input;
-}
-
-
-
-cut_left :: (cut: float, rect: Rect) -> (remainder: Rect, left: Rect) {
-    remainder := rect;
-    remainder.x += cut;
-    remainder.w -= cut;
-
-    left := rect;
-    left.w = cut;
-
-    return remainder, left;
-}
-
-cut_right :: (cut: float, rect: Rect) -> (remainder: Rect, right: Rect) {
-    remainder := rect;
-    remainder.w -= cut;
-
-    right := rect;
-    right.w = cut;
-    right.x = rect.w - cut;
-
-    return remainder, right;
-}
-
-cut_top :: (cut: float, rect: Rect) -> (remainder: Rect, top: Rect) {
-    remainder := rect;
-    remainder.h -= cut;
-
-    top := rect;
-    top.h = cut;
-    top.y = rect.h - cut;
-
-    return remainder, top;
-}
-
-
-expand_x :: (expand: float, rect: Rect) -> (r: Rect) {
-    r := rect;
-    r.x -= expand;
-    r.w += expand * 2;
-
-    return rect;
 }
