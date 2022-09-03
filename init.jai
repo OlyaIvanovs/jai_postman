@@ -1,5 +1,5 @@
 init_font :: () {
-    the_font = Simp.get_font_at_size(".", "OpenSans-BoldItalic.ttf", 16);
+    the_font = Simp.get_font_at_size(".", "FiraCode-Retina.ttf", 16);
     assert(the_font != null);
 }
 
