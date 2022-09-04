@@ -34,6 +34,7 @@ color_input : Vector4 = .{0.59, 0.59, 0.62, 1};
 color_selection : Vector4 = .{.14, .55, .69, 1};
 
 the_font : *Simp.Dynamic_Font;
+char_size: Vector2;
 
 // Pointers
 mouse_pointer: Vector2;
@@ -56,11 +57,23 @@ Key_State :: enum u16 {
 side_bar_w : float;
 move_bar_grab : bool;
 key_pressed : Key_State;
-text_input: [..] u8;
-input_focus : bool;
-text_pointer_show: bool;
 
-xb : float; // TODO!
+frame_time: float64;
+
+request_input: Text_Input;
+
+Text_Input :: struct {
+    text: [..] u8;
+    focused: bool;
+
+    cursor: struct {
+        pos: s64;
+        sel: s64;
+        visible: bool;
+        BLINKING_SPEED :: .4;
+    };
+}
+
 
 main :: () {
     the_window = create_window(window_width, window_height, "MY POSTMAN", background_color_rgb =  float.[.55,.01,.9]);
@@ -74,13 +87,12 @@ main :: () {
     side_bar_w = xx (window_width / 5);   
 
     quit : bool;
-    text_pointer_show_counter := 0;
+
     while !quit {
-        text_pointer_show_counter += 1;
-        if text_pointer_show_counter  == 30 {
-            text_pointer_show = !text_pointer_show;
-            text_pointer_show_counter = 0;
-        }
+        Input.update_window_events();
+
+        frame_time = get_time();
+
         key_pressed = .UNTOUCHED;
         for Input.get_window_resizes() {
             Simp.update_window(it.window);
@@ -88,35 +100,17 @@ main :: () {
             window_height = it.height;
         }
 
-        Input.update_window_events();
         for Input.events_this_frame {
             if it.type == .QUIT {
                 quit = true;
             }
 
-            if it.type == .TEXT_INPUT && input_focus {
-                key, count := key_utf32_to_utf8(it.utf32);  
-                for 0..count-1 {
-                    array_add(*text_input, key[it]);
-                }
-            }
-            if it.type == .KEYBOARD {
-                print("n is %\n", it);
-                if it.key_pressed == 0 {
-                    key_pressed = .REALISED;
-                    continue;
-                }
-                if it.key_pressed == 1 {
-                    key_pressed = .PRESSED;
+            if request_input.focused {
+                processed := request_input_process_event(it);
+                if processed continue;
+            } 
 
-                    if it.key_code == .BACKSPACE && input_focus {
-                        text_input.count -= 1;
-                    }
-                }
-                if it.key_code == .ESCAPE {
-                    quit = true;
-                }
-            }
+            // if it.type == .KEYBOARD && it.key_pressed then quit = true;
         }
 
         draw_one_frame();
@@ -124,6 +118,47 @@ main :: () {
         reset_temporary_storage();
     }
 
+}
+
+request_input_process_event :: (event: Input.Event) -> processed: bool {
+    text   := *request_input.text;
+    cursor := *request_input.cursor;
+
+    if event.type == .TEXT_INPUT {
+        key, count := key_utf32_to_utf8(event.utf32);  
+        assert(count == 1);  // only ASCII for simplicity now
+        array_insert_at(text, key[0], cursor.pos);
+        // for 0..count-1 {
+        //     array_add(text, key[it]);  // TODO: write a function to add array into array
+        // }
+        cursor.pos += 1;
+        return true;
+    }
+
+    if event.type == .KEYBOARD {
+        if event.key_pressed {
+            if event.key_code == {
+                case .BACKSPACE; 
+                    text.count -= 1;
+                    cursor.pos -= 1;
+
+                case .ARROW_LEFT;
+                    cursor.pos -= 1;
+                
+                case .ARROW_RIGHT;
+                    cursor.pos += 1;
+
+                case; 
+                    return false;
+            }
+
+            cursor.pos = clamp(cursor.pos, 0, text.count);
+
+            return true;
+        }
+    }
+
+    return false;
 }
 
 draw_one_frame :: () {
@@ -135,101 +170,84 @@ draw_one_frame :: () {
     // Check mouse position
     update_mouse_pointer();
 
-    // Simp.immediate_begin();
     Simp.set_shader_for_color();
 
     side_bar, top_bar, move_bar, bar, rect : Rect;
-    screen = make_rect(xx window_width, xx window_height, 0, 0);
+    screen = make_rect(0, 0, xx window_width, xx window_height);
     rect, side_bar = cut_left(side_bar_w, screen);
     rect, top_bar = cut_top(xx (window_height / 6), rect);
 
-    set_points(rect, color_1);
-    set_points(side_bar, color_2);
-    set_points(top_bar, color_3);
+    draw_rect(rect, color_1);
+    draw_rect(side_bar, color_2);
+    draw_rect(top_bar, color_3);
 
     // Draw move bar
     bar, move_bar = cut_right(5, side_bar);
     move_bar.x += 2; 
     move_bar_hover := expand_x(2, move_bar);
-    if mouse_pointer_is_within(move_bar_hover) {
-        set_points(move_bar, color_button);
-        if left_click && key_pressed == .PRESSED {
-            move_bar_grab = true;
-        }
-    }
 
-    if left_click && move_bar_grab {
-        side_bar_w = mouse_pointer.x;
-    }
-    if key_pressed == .REALISED && move_bar_grab {
-        move_bar_grab = false;
-    }
+    // !!!!!!!!!!!!!!!!!
+    // if mouse_pointer_is_within(move_bar_hover) {
+    //     draw_rect(move_bar, color_button);
+    //     if left_click && key_pressed == .PRESSED {
+    //         move_bar_grab = true;
+    //     }
+    // }
+
+    // if left_click && move_bar_grab {
+    //     side_bar_w = mouse_pointer.x;
+    // }
+    // if key_pressed == .REALISED && move_bar_grab {
+    //     move_bar_grab = false;
+    // }
 
     // Draw button
     button := draw_button(xx (top_bar.x + 0.9 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
 
-     // Draw text input
-    c : Vector4;
-    if input_focus {
-        c = color_white;
-    } else {
-        c = color_input;
-    }
-    text_input_rect := draw_text_input(xx (top_bar.x + 0.4 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 520, 40, c);  
-
-    // TEXT
-    text := tprint("%", to_string(text_input));
-    text_start := text_input_rect.x + 10;
-    text_end := text_start + Simp.prepare_text(the_font, text);
-
-    // Draw text selection
-    if mouse_pointer_is_within(text_input_rect) {
-        if left_click && key_pressed == .PRESSED {
-            xb = mouse_pointer.x;
+    // Draw text input
+    {
+        text_input_rect := make_rect(top_bar.x + 0.4 * top_bar.w, top_bar.y + 0.2 * top_bar.h, 520, 40);
+        if mouse_pointer_is_within(text_input_rect) && mouse_left_just_pressed() {
+            request_input.focused = true;
         }
-        if left_click{
-            text_selection_w := mouse_pointer.x - xb;
-            if mouse_pointer.x > text_end {
-                text_selection_w := text_end - xb;
-            }
-            text_input_selection := draw_text_input(xb, xx (text_input_rect.y + 5), text_selection_w, 30, color_selection);  
+        color := ifx request_input.focused then color_white else color_input;
+        draw_rect(text_input_rect, color);
+
+        // TEXT
+        text := tprint("%", to_string(request_input.text));
+
+        // Draw text
+        Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, text, color_button);
+
+        // Cursor animation
+        num_frame := cast(int) (frame_time / request_input.cursor.BLINKING_SPEED);
+        cursor_show := num_frame % 2 == 0;
+
+        // Draw cursor
+        if request_input.focused && cursor_show {
+            text_cursor_rect: Rect = ---;
+            text_cursor_rect.x =  text_input_rect.x + 10 + char_size.x * request_input.cursor.pos; // end text
+            text_cursor_rect.y = text_input_rect.y + 5;
+            text_cursor_rect.w = 2;
+            text_cursor_rect.h = text_input_rect.h - 10;
+            draw_rect(text_cursor_rect, color_button);
         }
-    } 
-
-    // Draw text
-    Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, text, color_button);
-
-    // Draw text pointer
-    if input_focus && text_pointer_show {
-        text_pointer_rect: Rect = ---;
-        text_pointer_rect.x = Simp.prepare_text(the_font, text) + text_input_rect.x + 10;
-        text_pointer_rect.y = text_input_rect.y + 5;
-        text_pointer_rect.w = 2;
-        text_pointer_rect.h = text_input_rect.h - 10;
-        set_points(text_pointer_rect, color_button);
     }
 
     // Check mouse pointer image
-    input_focus = false;
     if mouse_pointer_is_within(button) {
         set_pointer_image(Pointer_Image.HAND);
     } else if mouse_pointer_is_within(move_bar) {
         set_pointer_image(Pointer_Image.SLIDE);
-    } else if mouse_pointer_is_within(text_input_rect) {
-        input_focus = true;
-        set_pointer_image(Pointer_Image.CURSOR);
+    // } else if mouse_pointer_is_within(text_input_rect) {
+    //     input_focus = true;
+    //     set_pointer_image(Pointer_Image.CURSOR);
     } else {
         set_pointer_image(Pointer_Image.ARROW);
     }  
 
     // Simp.immediate_flush();
     Simp.swap_buffers(the_window);
-}
-
-set_points :: (r: Rect, color: Vector4) {
-    using r;
-    Simp.set_shader_for_color();
-    Simp.immediate_quad(x, y, x + w, y + h, color);
 }
 
 set_pointer_image :: (image: Pointer_Image) {
@@ -255,4 +273,20 @@ point_within :: (p: Vector2, r: Rect) -> bool {
 
 mouse_pointer_is_within :: (rect: Rect) -> bool {
     return point_within(mouse_pointer, rect);
+}
+
+key_state :: inline (key: Input.Key_Code) -> Input.Key_Current_State {
+    return Input.input_button_states[key];
+}
+
+mouse_left_just_pressed :: inline () -> bool {
+    return key_state(.MOUSE_BUTTON_LEFT) & .START != 0;
+}
+
+mouse_left_just_released :: inline () -> bool {
+    return key_state(.MOUSE_BUTTON_LEFT) & .END != 0;
+}
+
+mouse_left_is_down :: inline () -> bool {
+    return key_state(.MOUSE_BUTTON_LEFT) & .DOWN != 0;
 }

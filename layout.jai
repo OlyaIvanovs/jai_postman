@@ -1,4 +1,4 @@
-make_rect :: (width: float, height: float, x: float, y: float) -> Rect{
+make_rect :: (x: float, y: float, width: float, height: float) -> Rect{
     rect : Rect;
 
     rect.w = width;
