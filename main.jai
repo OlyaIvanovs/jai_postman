@@ -32,6 +32,7 @@ color_3 : Vector4 = .{0.176, 0.2, 0.23, 1};
 color_button : Vector4 = .{0, 0.3, 0.4, 1};
 color_input : Vector4 = .{0.59, 0.59, 0.62, 1};
 color_selection : Vector4 = .{.14, .55, .69, 1};
+color_orange : Vector4 = .{.65, .45, .19, 1};
 
 the_font : *Simp.Dynamic_Font;
 char_size: Vector2;
@@ -124,8 +125,6 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
     text   := *request_input.text;
     cursor := *request_input.cursor;
 
-    event.repeat = true;
-
     if event.type == .TEXT_INPUT {
         key, count := key_utf32_to_utf8(event.utf32);  
         assert(count == 1);  // only ASCII for simplicity now
@@ -196,6 +195,12 @@ draw_one_frame :: () {
     draw_rect(side_bar, color_2);
     draw_rect(top_bar, color_3);
 
+    // TEXT
+    t := tprint("Requests:");
+
+    // Draw text
+    Simp.draw_text(the_font, xx (side_bar.x + 10), xx (0.95 * side_bar.h), t, color_orange);
+
     // Draw move bar
     bar, move_bar = cut_right(5, side_bar);
     move_bar.x += 2; 
@@ -218,6 +223,8 @@ draw_one_frame :: () {
 
     // Draw button
     button := draw_button(xx (top_bar.x + 0.9 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
+
+    request_type := draw_button(xx (top_bar.x + 0.3 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_orange, "GET");
 
     // Draw text input
     {
@@ -256,6 +263,19 @@ draw_one_frame :: () {
 
         // TEXT
         t := tprint("%", to_string(request_input.text));
+
+        // Draw text
+        Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, t, color_button);
+    }
+
+
+    // Draw response field
+    {
+        text_input_rect := make_rect(rect.x + 0.1 * rect.w, rect.y + 0.1 * rect.h, 0.8 * rect.w, 0.8 * rect.h);
+        draw_rect(text_input_rect, color_input);
+
+        // TEXT
+        t := tprint("Status: 200 OK");
 
         // Draw text
         Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, t, color_button);
