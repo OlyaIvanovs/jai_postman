@@ -124,6 +124,8 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
     text   := *request_input.text;
     cursor := *request_input.cursor;
 
+    event.repeat = true;
+
     if event.type == .TEXT_INPUT {
         key, count := key_utf32_to_utf8(event.utf32);  
         assert(count == 1);  // only ASCII for simplicity now
@@ -132,10 +134,13 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
         //     array_add(text, key[it]);  // TODO: write a function to add array into array
         // }
         cursor.pos += 1;
+        cursor.sel += 1;
         return true;
     }
 
     if event.type == .KEYBOARD {
+        print("EVENT %", event);
+
         if event.key_pressed {
             if event.key_code == {
                 case .BACKSPACE; 
@@ -143,17 +148,27 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                     cursor.pos -= 1;
 
                 case .ARROW_LEFT;
-                    cursor.pos -= 1;
+                    if event.shift_pressed {
+                        cursor.sel -= 1;
+                    } else {
+                        cursor.pos -= 1;
+                        cursor.sel = cursor.pos;
+                    }
                 
                 case .ARROW_RIGHT;
-                    cursor.pos += 1;
+                    if event.shift_pressed {
+                        cursor.sel += 1;
+                    } else {
+                        cursor.pos += 1;
+                        cursor.sel = cursor.pos;
+                    }
 
                 case; 
                     return false;
             }
 
             cursor.pos = clamp(cursor.pos, 0, text.count);
-
+            cursor.sel = clamp(cursor.sel, 0, text.count);
             return true;
         }
     }
@@ -213,12 +228,6 @@ draw_one_frame :: () {
         color := ifx request_input.focused then color_white else color_input;
         draw_rect(text_input_rect, color);
 
-        // TEXT
-        text := tprint("%", to_string(request_input.text));
-
-        // Draw text
-        Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, text, color_button);
-
         // Cursor animation
         num_frame := cast(int) (frame_time / request_input.cursor.BLINKING_SPEED);
         cursor_show := num_frame % 2 == 0;
@@ -232,6 +241,24 @@ draw_one_frame :: () {
             text_cursor_rect.h = text_input_rect.h - 10;
             draw_rect(text_cursor_rect, color_button);
         }
+
+        // Draw selection
+        using request_input;
+        if cursor.pos != cursor.sel {
+            text_select_rect: Rect = ---;
+            x := ifx cursor.sel < cursor.pos then cursor.sel else cursor.pos
+            text_select_rect.x =  text_input_rect.x + 10 + char_size.x * x; // end text
+            text_select_rect.y = text_input_rect.y + 5;
+            text_select_rect.w = abs(cursor.sel - cursor.pos) * char_size.x;
+            text_select_rect.h = text_input_rect.h - 10;
+            draw_rect(text_select_rect, color_selection);
+        }
+
+        // TEXT
+        t := tprint("%", to_string(request_input.text));
+
+        // Draw text
+        Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, t, color_button);
     }
 
     // Check mouse pointer image
