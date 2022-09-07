@@ -127,6 +127,7 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
 
     if event.type == .TEXT_INPUT {
         key, count := key_utf32_to_utf8(event.utf32);  
+        if key[0] == 127 return true; // DEL bug
         assert(count == 1);  // only ASCII for simplicity now
         array_insert_at(text, key[0], cursor.pos);
         // for 0..count-1 {
@@ -137,29 +138,42 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
         return true;
     }
 
+    cursor.visible = false;
     if event.type == .KEYBOARD {
-        print("EVENT %", event);
+        // print("EVENT %\n", event);
 
         if event.key_pressed {
+            cursor.visible = true;
             if event.key_code == {
                 case .BACKSPACE; 
                     text.count -= 1;
                     cursor.pos -= 1;
+                    text.count = max(text.count, 0);
 
                 case .ARROW_LEFT;
                     if event.shift_pressed {
-                        cursor.sel -= 1;
-                    } else {
                         cursor.pos -= 1;
-                        cursor.sel = cursor.pos;
+                    } else {
+                        if cursor.pos < cursor.sel {
+                            cursor.pos -= 1;
+                            cursor.sel = cursor.pos;
+                        } else {
+                            cursor.sel -= 1;
+                            cursor.pos = cursor.sel;
+                        }
                     }
                 
                 case .ARROW_RIGHT;
                     if event.shift_pressed {
-                        cursor.sel += 1;
-                    } else {
                         cursor.pos += 1;
-                        cursor.sel = cursor.pos;
+                    } else {
+                        if cursor.pos > cursor.sel {
+                            cursor.pos += 1;
+                            cursor.sel = cursor.pos;
+                        } else {
+                            cursor.sel += 1;
+                            cursor.pos = cursor.sel;
+                        }
                     }
 
                 case; 
@@ -239,16 +253,6 @@ draw_one_frame :: () {
         num_frame := cast(int) (frame_time / request_input.cursor.BLINKING_SPEED);
         cursor_show := num_frame % 2 == 0;
 
-        // Draw cursor
-        if request_input.focused && cursor_show {
-            text_cursor_rect: Rect = ---;
-            text_cursor_rect.x =  text_input_rect.x + 10 + char_size.x * request_input.cursor.pos; // end text
-            text_cursor_rect.y = text_input_rect.y + 5;
-            text_cursor_rect.w = 2;
-            text_cursor_rect.h = text_input_rect.h - 10;
-            draw_rect(text_cursor_rect, color_button);
-        }
-
         // Draw selection
         using request_input;
         if cursor.pos != cursor.sel {
@@ -259,6 +263,16 @@ draw_one_frame :: () {
             text_select_rect.w = abs(cursor.sel - cursor.pos) * char_size.x;
             text_select_rect.h = text_input_rect.h - 10;
             draw_rect(text_select_rect, color_selection);
+        }
+
+        // Draw cursor
+        if request_input.focused && (cursor.visible || cursor_show) {
+            text_cursor_rect: Rect = ---;
+            text_cursor_rect.x =  text_input_rect.x + 10 + char_size.x * request_input.cursor.pos; // end text
+            text_cursor_rect.y = text_input_rect.y + 5;
+            text_cursor_rect.w = 2;
+            text_cursor_rect.h = text_input_rect.h - 10;
+            draw_rect(text_cursor_rect, color_button);
         }
 
         // TEXT
