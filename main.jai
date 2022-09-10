@@ -1,4 +1,6 @@
 #import "Basic";
+#import "File";
+#import "String";
 #import "Window_Creation";
 #import "Math";
 #import "X11";
@@ -62,8 +64,22 @@ key_pressed : Key_State;
 frame_time: float64;
 
 request_input: Text_Input;
+response_field: Response_Field;
 
 Text_Input :: struct {
+    text: [..] u8;
+    focused: bool;
+
+    cursor: struct {
+        pos: s64;
+        sel: s64;
+        visible: bool;
+        BLINKING_SPEED :: .4;
+    };
+}
+
+Response_Field :: struct {
+    show: bool;
     text: [..] u8;
     focused: bool;
 
@@ -238,13 +254,22 @@ draw_one_frame :: () {
     // Draw button
     button := draw_button(xx (top_bar.x + 0.9 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
 
+    // Read from file by clicking on button 'Send'
+    if mouse_pointer_is_within(button) && mouse_left_just_pressed() {
+        response_field.show = true;
+    }
+
     request_type := draw_button(xx (top_bar.x + 0.3 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_orange, "GET");
 
     // Draw text input
     {
         text_input_rect := make_rect(top_bar.x + 0.4 * top_bar.w, top_bar.y + 0.2 * top_bar.h, 520, 40);
-        if mouse_pointer_is_within(text_input_rect) && mouse_left_just_pressed() {
-            request_input.focused = true;
+        if mouse_pointer_is_within(text_input_rect) {
+            if mouse_left_just_pressed() {
+                request_input.focused = true;
+            }
+        } else {
+            request_input.focused = false;
         }
         color := ifx request_input.focused then color_white else color_input;
         draw_rect(text_input_rect, color);
@@ -287,6 +312,17 @@ draw_one_frame :: () {
     {
         text_input_rect := make_rect(rect.x + 0.1 * rect.w, rect.y + 0.1 * rect.h, 0.8 * rect.w, 0.8 * rect.h);
         draw_rect(text_input_rect, color_input);
+
+        // Read from file by clicking on button 'Send'
+        if response_field.show {
+            text_from_file := read_entire_file("text.txt");
+            lines := split(text_from_file , "\n");
+            k := 0;
+            for lines {
+                Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx (text_input_rect.y + text_input_rect.h - 20 - k), it, color_button);
+                k += 20;
+            }
+        }
 
         // TEXT
         t := tprint("Status: 200 OK");
