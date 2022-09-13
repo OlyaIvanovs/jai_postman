@@ -69,6 +69,8 @@ response_field: Response_Field;
 Text_Input :: struct {
     text: [..] u8;
     focused: bool;
+    offset: int;
+    capacity: int;
 
     cursor: struct {
         pos: s64;
@@ -151,6 +153,10 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
         // }
         cursor.pos += 1;
         cursor.sel += 1;
+        d := cursor.pos - request_input.capacity;
+        if d >=0 {
+            request_input.offset = d;
+        }
         return true;
     }
 
@@ -165,11 +171,23 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                     text.count -= 1;
                     cursor.pos -= 1;
                     text.count = max(text.count, 0);
+                    d := cursor.pos - request_input.capacity;
+                    if d >= 0{
+                        request_input.offset = d;
+                    } else {
+                        request_input.offset = 0;
+                    }
 
                 case .ARROW_LEFT;
                     if event.shift_pressed {
                         cursor.pos -= 1;
                     } else {
+                        d := cursor.pos - request_input.capacity;
+                        if d >= 0{
+                            request_input.offset = d;
+                        } else {
+                            request_input.offset = 0;
+                        }
                         if cursor.pos < cursor.sel {
                             cursor.pos -= 1;
                             cursor.sel = cursor.pos;
@@ -181,8 +199,15 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                 
                 case .ARROW_RIGHT;
                     if event.shift_pressed {
-                        cursor.pos += 1;
+                        cursor.pos += 1; // move only cursor.pos
                     } else {
+                        d := cursor.pos - request_input.capacity;
+                        if d >= 0 {
+                            request_input.offset = d;
+                        } else {
+                            request_input.offset = 0;
+                        }
+                        print("cursor pos %   offset % \n", cursor.pos, request_input.offset);
                         if cursor.pos > cursor.sel {
                             cursor.pos += 1;
                             cursor.sel = cursor.pos;
@@ -264,6 +289,7 @@ draw_one_frame :: () {
     // Draw text input
     {
         text_input_rect := make_rect(top_bar.x + 0.4 * top_bar.w, top_bar.y + 0.2 * top_bar.h, 520, 40);
+        request_input.capacity = cast(int) ((text_input_rect.w - 20) / char_size.x);
         if mouse_pointer_is_within(text_input_rect) {
             if mouse_left_just_pressed() {
                 request_input.focused = true;
@@ -282,18 +308,21 @@ draw_one_frame :: () {
         using request_input;
         if cursor.pos != cursor.sel {
             text_select_rect: Rect = ---;
-            x := ifx cursor.sel < cursor.pos then cursor.sel else cursor.pos
+            pos := cursor.pos - request_input.offset;
+            sel := cursor.sel - request_input.offset;
+            x := ifx sel < pos then sel else pos
             text_select_rect.x =  text_input_rect.x + 10 + char_size.x * x; // end text
             text_select_rect.y = text_input_rect.y + 5;
-            text_select_rect.w = abs(cursor.sel - cursor.pos) * char_size.x;
+            text_select_rect.w = abs(sel - pos) * char_size.x;
             text_select_rect.h = text_input_rect.h - 10;
             draw_rect(text_select_rect, color_selection);
         }
 
         // Draw cursor
-        if request_input.focused && (cursor.visible || cursor_show) {
+        if focused && (cursor.visible || cursor_show) {
             text_cursor_rect: Rect = ---;
-            text_cursor_rect.x =  text_input_rect.x + 10 + char_size.x * request_input.cursor.pos; // end text
+            x := text_input_rect.x + 10 + char_size.x * (cursor.pos - request_input.offset); 
+            text_cursor_rect.x =  x;
             text_cursor_rect.y = text_input_rect.y + 5;
             text_cursor_rect.w = 2;
             text_cursor_rect.h = text_input_rect.h - 10;
@@ -301,10 +330,16 @@ draw_one_frame :: () {
         }
 
         // TEXT
-        t := tprint("%", to_string(request_input.text));
+        t := tprint("%", to_string(text));
+        c := t;
+
+        if request_input.offset > 0 {
+            c.count -= request_input.offset;
+            c.data += request_input.offset;
+        } 
 
         // Draw text
-        Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, t, color_button);
+        Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, c, color_button);
     }
 
 
