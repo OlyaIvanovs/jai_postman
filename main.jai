@@ -168,9 +168,20 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
             cursor.visible = true;
             if event.key_code == {
                 case .BACKSPACE; 
-                    text.count -= 1;
-                    cursor.pos -= 1;
-                    text.count = max(text.count, 0);
+                    begin := cursor.pos;
+                    end := cursor.sel;
+                    if begin == end {
+                        text.count -= 1;
+                        cursor.pos -= 1;
+                    } else {
+                        if cursor.sel > cursor.pos {
+                            begin = cursor.pos;
+                            end = cursor.sel;
+                        }
+                        array_remove_by_range(text, begin, end-begin);
+                    }                    
+
+                    cursor.sel = cursor.pos;
                     d := cursor.pos - request_input.capacity;
                     if d >= 0{
                         request_input.offset = d;
@@ -181,6 +192,12 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                 case .ARROW_LEFT;
                     if event.shift_pressed {
                         cursor.pos -= 1;
+                        d := cursor.pos - request_input.capacity;
+                        if d >= 0{
+                            request_input.offset = d;
+                        } else {
+                            request_input.offset = 0;
+                        }
                     } else {
                         d := cursor.pos - request_input.capacity;
                         if d >= 0{
@@ -200,6 +217,12 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                 case .ARROW_RIGHT;
                     if event.shift_pressed {
                         cursor.pos += 1; // move only cursor.pos
+                        d := cursor.pos - request_input.capacity;
+                        if d >= 0 {
+                            request_input.offset = d;
+                        } else {
+                            request_input.offset = 0;
+                        }
                     } else {
                         d := cursor.pos - request_input.capacity;
                         if d >= 0 {
@@ -332,9 +355,11 @@ draw_one_frame :: () {
         // TEXT
         t := tprint("%", to_string(text));
         c := t;
-
+        // print("request_input.capacity % C %", request_input.capacity, c.count);
+        if request_input.capacity > 0 && c.count > request_input.capacity{
+            c.count = request_input.capacity;
+        }
         if request_input.offset > 0 {
-            c.count -= request_input.offset;
             c.data += request_input.offset;
         } 
 
@@ -421,4 +446,13 @@ mouse_left_just_released :: inline () -> bool {
 
 mouse_left_is_down :: inline () -> bool {
     return key_state(.MOUSE_BUTTON_LEFT) & .DOWN != 0;
+}
+
+array_remove_by_range :: (array_pointer: *[..] $T, index: s64, len: s64) {
+    assert(index >= 0);
+    assert(index < array_pointer.count);
+    if len < 0 return;
+
+    memcpy(array_pointer.data+index, array_pointer.data+index+len, len);
+    array_pointer.count -= len;
 }
