@@ -144,6 +144,18 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
     cursor := *request_input.cursor;
 
     if event.type == .TEXT_INPUT {
+
+        if cursor.sel != cursor.pos && cursor.pos > 0 {
+            begin := cursor.pos;
+            end := cursor.sel;
+            if cursor.sel > cursor.pos {
+                begin = cursor.pos;
+                end = cursor.sel;
+            }
+            array_remove_by_range(text, begin, end-begin);
+            cursor.sel = cursor.pos;
+        }
+
         key, count := key_utf32_to_utf8(event.utf32);  
         if key[0] == 127 return true; // DEL bug
         assert(count == 1);  // only ASCII for simplicity now
@@ -162,12 +174,12 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
 
     cursor.visible = false;
     if event.type == .KEYBOARD {
-        // print("EVENT %\n", event);
 
         if event.key_pressed {
             cursor.visible = true;
             if event.key_code == {
                 case .BACKSPACE; 
+                    if cursor.pos < 0 then return true;
                     begin := cursor.pos;
                     end := cursor.sel;
                     if begin == end {
@@ -179,9 +191,10 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                             end = cursor.sel;
                         }
                         array_remove_by_range(text, begin, end-begin);
-                    }                    
-
+                    } 
+                    if cursor.pos < 0 then cursor.pos = 0;
                     cursor.sel = cursor.pos;
+
                     d := cursor.pos - request_input.capacity;
                     if d >= 0{
                         request_input.offset = d;
@@ -190,6 +203,7 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                     }
 
                 case .ARROW_LEFT;
+                    if cursor.pos <= 0 then return true;
                     if event.shift_pressed {
                         cursor.pos -= 1;
                         d := cursor.pos - request_input.capacity;
@@ -215,6 +229,7 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                     }
                 
                 case .ARROW_RIGHT;
+                    if cursor.pos >= text.count then return true;
                     if event.shift_pressed {
                         cursor.pos += 1; // move only cursor.pos
                         d := cursor.pos - request_input.capacity;
@@ -230,7 +245,6 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                         } else {
                             request_input.offset = 0;
                         }
-                        print("cursor pos %   offset % \n", cursor.pos, request_input.offset);
                         if cursor.pos > cursor.sel {
                             cursor.pos += 1;
                             cursor.sel = cursor.pos;
@@ -243,9 +257,6 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                 case; 
                     return false;
             }
-
-            cursor.pos = clamp(cursor.pos, 0, text.count);
-            cursor.sel = clamp(cursor.sel, 0, text.count);
             return true;
         }
     }
@@ -331,9 +342,13 @@ draw_one_frame :: () {
         using request_input;
         if cursor.pos != cursor.sel {
             text_select_rect: Rect = ---;
+            // print("cursor.pos % cursor.sel % offset %", cursor.pos, cursor.sel, request_input.offset);
             pos := cursor.pos - request_input.offset;
             sel := cursor.sel - request_input.offset;
-            x := ifx sel < pos then sel else pos
+            x := ifx sel < pos then sel else pos;
+            if request_input.offset != 0 {
+                x -= abs(sel - pos);
+            }
             text_select_rect.x =  text_input_rect.x + 10 + char_size.x * x; // end text
             text_select_rect.y = text_input_rect.y + 5;
             text_select_rect.w = abs(sel - pos) * char_size.x;
