@@ -69,8 +69,8 @@ response_field: Response_Field;
 Text_Input :: struct {
     text: [..] u8;
     focused: bool;
-    offset: int;
-    capacity: int;
+    offset: s64;
+    capacity: s64;
 
     cursor: struct {
         pos: s64;
@@ -145,14 +145,9 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
 
     if event.type == .TEXT_INPUT {
 
-        if cursor.sel != cursor.pos && cursor.pos > 0 {
-            begin := cursor.pos;
-            end := cursor.sel;
-            if cursor.sel > cursor.pos {
-                begin = cursor.pos;
-                end = cursor.sel;
-            }
-            array_remove_by_range(text, begin, end-begin);
+        if cursor.sel != cursor.pos && cursor.pos > 0 && cursor.sel > 0 {
+            array_remove_by_range(text, min(cursor.pos, cursor.sel), abs(cursor.pos - cursor.sel));
+            cursor.pos = min(cursor.pos,cursor.sel);
             cursor.sel = cursor.pos;
         }
 
@@ -163,12 +158,9 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
         // for 0..count-1 {
         //     array_add(text, key[it]);  // TODO: write a function to add array into array
         // }
+        print("Cursor %  Offset % \n", cursor.pos, request_input.offset);
         cursor.pos += 1;
         cursor.sel += 1;
-        d := cursor.pos - request_input.capacity;
-        if d >=0 {
-            request_input.offset = d;
-        }
         return true;
     }
 
@@ -179,80 +171,48 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
             cursor.visible = true;
             if event.key_code == {
                 case .BACKSPACE; 
-                    if cursor.pos < 0 then return true;
-                    begin := cursor.pos;
-                    end := cursor.sel;
-                    if begin == end {
-                        text.count -= 1;
+                    if cursor.pos < 0 || text.count <= 0 then return true;
+
+                    if cursor.pos == cursor.sel && cursor.pos > 0 {
+                        array_remove_by_range(text, cursor.pos-1, 1);
                         cursor.pos -= 1;
                     } else {
-                        if cursor.sel > cursor.pos {
-                            begin = cursor.pos;
-                            end = cursor.sel;
-                        }
-                        array_remove_by_range(text, begin, end-begin);
+                        array_remove_by_range(text, min(cursor.pos, cursor.sel), abs(cursor.pos - cursor.sel));
+                        cursor.pos = min(cursor.pos,cursor.sel);
                     } 
+                    print("Cursor % Offset %\n", cursor.pos, request_input.offset);
                     if cursor.pos < 0 then cursor.pos = 0;
                     cursor.sel = cursor.pos;
 
-                    d := cursor.pos - request_input.capacity;
-                    if d >= 0{
-                        request_input.offset = d;
-                    } else {
-                        request_input.offset = 0;
-                    }
-
                 case .ARROW_LEFT;
-                    if cursor.pos <= 0 then return true;
                     if event.shift_pressed {
                         cursor.pos -= 1;
-                        d := cursor.pos - request_input.capacity;
-                        if d >= 0{
-                            request_input.offset = d;
-                        } else {
-                            request_input.offset = 0;
-                        }
+                        if cursor.pos < 0 then cursor.pos = 0;
                     } else {
-                        d := cursor.pos - request_input.capacity;
-                        if d >= 0{
-                            request_input.offset = d;
-                        } else {
-                            request_input.offset = 0;
-                        }
-                        if cursor.pos < cursor.sel {
+                        if cursor.pos == cursor.sel {
                             cursor.pos -= 1;
-                            cursor.sel = cursor.pos;
                         } else {
-                            cursor.sel -= 1;
-                            cursor.pos = cursor.sel;
+                            cursor.pos = min(cursor.sel, cursor.pos);
                         }
+                        if cursor.pos < 0 then cursor.pos = 0;
+                        cursor.sel = cursor.pos;
                     }
+                    print("ARROW LEFT cursor pos: % \n", cursor.pos);
                 
                 case .ARROW_RIGHT;
-                    if cursor.pos >= text.count then return true;
+                    if cursor.pos > text.count then return true;
                     if event.shift_pressed {
                         cursor.pos += 1; // move only cursor.pos
-                        d := cursor.pos - request_input.capacity;
-                        if d >= 0 {
-                            request_input.offset = d;
-                        } else {
-                            request_input.offset = 0;
-                        }
+                        if cursor.pos >= text.count then cursor.pos = text.count;
                     } else {
-                        d := cursor.pos - request_input.capacity;
-                        if d >= 0 {
-                            request_input.offset = d;
-                        } else {
-                            request_input.offset = 0;
-                        }
-                        if cursor.pos > cursor.sel {
+                        if cursor.pos == cursor.sel {
                             cursor.pos += 1;
-                            cursor.sel = cursor.pos;
                         } else {
-                            cursor.sel += 1;
-                            cursor.pos = cursor.sel;
+                            cursor.pos = max(cursor.sel, cursor.pos);
                         }
+                        cursor.sel = cursor.pos;
                     }
+                    print("ARROW RIGHTcursor pos: % \n", cursor.pos);
 
                 case; 
                     return false;
@@ -322,8 +282,21 @@ draw_one_frame :: () {
 
     // Draw text input
     {
+        using request_input;
+
         text_input_rect := make_rect(top_bar.x + 0.4 * top_bar.w, top_bar.y + 0.2 * top_bar.h, 520, 40);
         request_input.capacity = cast(int) ((text_input_rect.w - 20) / char_size.x);
+
+        // Calulate offset
+        cursor_min := offset;
+        cursor_max := offset + capacity;
+        if cursor.pos < cursor_min {
+            offset = cursor.pos;
+        }
+        if cursor.pos > cursor_max {
+            offset += cursor.pos - cursor_max;
+        }
+
         if mouse_pointer_is_within(text_input_rect) {
             if mouse_left_just_pressed() {
                 request_input.focused = true;
@@ -339,21 +312,11 @@ draw_one_frame :: () {
         cursor_show := num_frame % 2 == 0;
 
         // Draw selection
-        using request_input;
         if cursor.pos != cursor.sel {
-            text_select_rect: Rect = ---;
-            // print("cursor.pos % cursor.sel % offset %", cursor.pos, cursor.sel, request_input.offset);
-            pos := cursor.pos - request_input.offset;
-            sel := cursor.sel - request_input.offset;
-            x := ifx sel < pos then sel else pos;
-            if request_input.offset != 0 {
-                x -= abs(sel - pos);
-            }
-            text_select_rect.x =  text_input_rect.x + 10 + char_size.x * x; // end text
-            text_select_rect.y = text_input_rect.y + 5;
-            text_select_rect.w = abs(sel - pos) * char_size.x;
-            text_select_rect.h = text_input_rect.h - 10;
-            draw_rect(text_select_rect, color_selection);
+            selection := shrink(5, text_input_rect);
+            selection.x += (cursor.pos - offset) * char_size.x + 5;
+            selection.w = (clamp(cursor.sel, cursor_min, cursor_max) - cursor.pos) * char_size.x;
+            draw_rect(selection, color_selection);
         }
 
         // Draw cursor
@@ -368,18 +331,9 @@ draw_one_frame :: () {
         }
 
         // TEXT
-        t := tprint("%", to_string(text));
-        c := t;
-        // print("request_input.capacity % C %", request_input.capacity, c.count);
-        if request_input.capacity > 0 && c.count > request_input.capacity{
-            c.count = request_input.capacity;
-        }
-        if request_input.offset > 0 {
-            c.data += request_input.offset;
-        } 
-
-        // Draw text
-        Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, c, color_button);
+        // t := tprint("%", to_string(text));
+        visible_text := slice(to_string(text), request_input.offset, request_input.capacity); 
+        Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, visible_text, color_button);
     }
 
 
@@ -468,6 +422,6 @@ array_remove_by_range :: (array_pointer: *[..] $T, index: s64, len: s64) {
     assert(index < array_pointer.count);
     if len < 0 return;
 
-    memcpy(array_pointer.data+index, array_pointer.data+index+len, len);
+    memcpy(array_pointer.data+index, array_pointer.data+index+len, (array_pointer.count - index - len));
     array_pointer.count -= len;
 }

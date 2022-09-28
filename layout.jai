@@ -48,5 +48,16 @@ expand_x :: (expand: float, rect: Rect) -> (r: Rect) {
     r.x -= expand;
     r.w += expand * 2;
 
-    return rect;
+    return r;
+}
+
+
+shrink :: (amount: float, rect: Rect) -> (r: Rect) {
+    r := rect;
+    r.x += amount;
+    r.w -= amount * 2;
+    r.y += amount;
+    r.h -= amount * 2;
+
+    return r;
 }
