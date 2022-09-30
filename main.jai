@@ -158,7 +158,6 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
         // for 0..count-1 {
         //     array_add(text, key[it]);  // TODO: write a function to add array into array
         // }
-        print("Cursor %  Offset % \n", cursor.pos, request_input.offset);
         cursor.pos += 1;
         cursor.sel += 1;
         return true;
@@ -180,7 +179,6 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                         array_remove_by_range(text, min(cursor.pos, cursor.sel), abs(cursor.pos - cursor.sel));
                         cursor.pos = min(cursor.pos,cursor.sel);
                     } 
-                    print("Cursor % Offset %\n", cursor.pos, request_input.offset);
                     if cursor.pos < 0 then cursor.pos = 0;
                     cursor.sel = cursor.pos;
 
@@ -196,14 +194,11 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                         }
                         if cursor.pos < 0 then cursor.pos = 0;
                         cursor.sel = cursor.pos;
-                    }
-                    print("ARROW LEFT cursor pos: % \n", cursor.pos);
-                
+                    }                
                 case .ARROW_RIGHT;
-                    if cursor.pos > text.count then return true;
+                    if cursor.pos >= text.count then return true;
                     if event.shift_pressed {
                         cursor.pos += 1; // move only cursor.pos
-                        if cursor.pos >= text.count then cursor.pos = text.count;
                     } else {
                         if cursor.pos == cursor.sel {
                             cursor.pos += 1;
@@ -212,8 +207,6 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
                         }
                         cursor.sel = cursor.pos;
                     }
-                    print("ARROW RIGHTcursor pos: % \n", cursor.pos);
-
                 case; 
                     return false;
             }
@@ -235,20 +228,23 @@ draw_one_frame :: () {
 
     Simp.set_shader_for_color();
 
-    side_bar, top_bar, move_bar, bar, rect : Rect;
+    side_bar, side_bar_header, top_bar, move_bar, bar, rect : Rect;
     screen = make_rect(0, 0, xx window_width, xx window_height);
     rect, side_bar = cut_left(side_bar_w, screen);
+    side_bar, side_bar_header = cut_top(side_bar.h / 10, side_bar);
     rect, top_bar = cut_top(xx (window_height / 6), rect);
 
     draw_rect(rect, color_1);
     draw_rect(side_bar, color_2);
+    draw_rect(side_bar_header, color_2);
     draw_rect(top_bar, color_3);
 
-    // TEXT
+    // Sidebar text
     t := tprint("Requests:");
+    Simp.draw_text(the_font, xx (side_bar_header.x + 10), xx (side_bar_header.y + side_bar_header.h * 0.3), t, color_orange);
+    text_from_file := read_entire_file("history.txt");
+    draw_formatted_text(text_from_file, shrink(10, side_bar), color_orange);
 
-    // Draw text
-    Simp.draw_text(the_font, xx (side_bar.x + 10), xx (0.95 * side_bar.h), t, color_orange);
 
     // Draw move bar
     bar, move_bar = cut_right(5, side_bar);
@@ -276,6 +272,13 @@ draw_one_frame :: () {
     // Read from file by clicking on button 'Send'
     if mouse_pointer_is_within(button) && mouse_left_just_pressed() {
         response_field.show = true;
+        f, success := file_open("history.txt");
+        s := "new line";
+        if success {
+            print("Write to file");
+            file_write(*f, s);
+        }
+        file_close(*f);
     }
 
     request_type := draw_button(xx (top_bar.x + 0.3 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_orange, "GET");
@@ -331,7 +334,6 @@ draw_one_frame :: () {
         }
 
         // TEXT
-        // t := tprint("%", to_string(text));
         visible_text := slice(to_string(text), request_input.offset, request_input.capacity); 
         Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, visible_text, color_button);
     }
@@ -345,18 +347,10 @@ draw_one_frame :: () {
         // Read from file by clicking on button 'Send'
         if response_field.show {
             text_from_file := read_entire_file("text.txt");
-            lines := split(text_from_file , "\n");
-            k := 0;
-            for lines {
-                Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx (text_input_rect.y + text_input_rect.h - 20 - k), it, color_button);
-                k += 20;
-            }
+            draw_formatted_text(text_from_file, text_input_rect, color_button);
         }
 
-        // TEXT
         t := tprint("Status: 200 OK");
-
-        // Draw text
         Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, t, color_button);
     }
 
@@ -375,6 +369,10 @@ draw_one_frame :: () {
     // Simp.immediate_flush();
     Simp.swap_buffers(the_window);
 }
+
+
+
+
 
 set_pointer_image :: (image: Pointer_Image) {
     // if !initted_pointers  init_pointers();

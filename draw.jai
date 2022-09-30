@@ -21,3 +21,13 @@ draw_button :: (x: float, y: float, width: float, height: float, color: Vector4,
 
     return button;
 }
+
+
+draw_formatted_text :: (text: string, rect: Rect, color: Vector4) {
+    lines := split(text , "\n");
+    k := 0;
+    for lines {
+        Simp.draw_text(the_font, xx (rect.x + 10), xx (rect.y + rect.h - 20 - k), it, color);
+        k += 20;
+    }
+}
