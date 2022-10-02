@@ -50,21 +50,11 @@ Pointer_Image :: enum u16 {
 }
 pointers: [NUM_POINTERS] Cursor;
 
-Key_State :: enum u16 {
-    REALISED;
-    PRESSED;
-    UNTOUCHED;
-
-}
-
 side_bar_w : float;
-move_bar_grab : bool;
-key_pressed : Key_State;
-
 frame_time: float64;
-
 request_input: Text_Input;
 response_field: Response_Field;
+ui_state : UI_State;
 
 Text_Input :: struct {
     text: [..] u8;
@@ -93,6 +83,15 @@ Response_Field :: struct {
     };
 }
 
+UI_State :: struct {
+    mouse_x: s64;
+    mouse_y: s64;
+    mouse_down: bool;
+
+    hot_item: int;
+    active_item: int;
+}
+
 
 main :: () {
     the_window = create_window(window_width, window_height, "MY POSTMAN", background_color_rgb =  float.[.55,.01,.9]);
@@ -106,13 +105,12 @@ main :: () {
     side_bar_w = xx (window_width / 5);   
 
     quit : bool;
-
     while !quit {
+        ui_state : UI_State = ---;
         Input.update_window_events();
 
         frame_time = get_time();
-
-        key_pressed = .UNTOUCHED;
+        
         for Input.get_window_resizes() {
             Simp.update_window(it.window);
             window_width = it.width;
@@ -124,12 +122,15 @@ main :: () {
                 quit = true;
             }
 
+            if mouse_left_just_pressed() {
+                print("HERE");
+                ui_state.mouse_down = true;
+            }
+
             if request_input.focused {
                 processed := request_input_process_event(it);
                 if processed continue;
             } 
-
-            // if it.type == .KEYBOARD && it.key_pressed then quit = true;
         }
 
         draw_one_frame();
@@ -251,33 +252,26 @@ draw_one_frame :: () {
     move_bar.x += 2; 
     move_bar_hover := expand_x(2, move_bar);
 
-    // !!!!!!!!!!!!!!!!!
-    // if mouse_pointer_is_within(move_bar_hover) {
-    //     draw_rect(move_bar, color_button);
-    //     if left_click && key_pressed == .PRESSED {
-    //         move_bar_grab = true;
-    //     }
-    // }
+    // TODO move move bar!!!!
 
-    // if left_click && move_bar_grab {
-    //     side_bar_w = mouse_pointer.x;
-    // }
-    // if key_pressed == .REALISED && move_bar_grab {
-    //     move_bar_grab = false;
-    // }
-
-    // Draw button
-    button := draw_button(xx (top_bar.x + 0.9 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
+    // Draw button 
+    claer_button := set_button(132, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.7 * top_bar.h), 120, 40, color_orange, "Clear");
+    button := set_button(122, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
 
     // Read from file by clicking on button 'Send'
-    if mouse_pointer_is_within(button) && mouse_left_just_pressed() {
+    if ui_state.active_item == 122 {
         response_field.show = true;
-        f, success := file_open("history.txt");
-        s := "new line";
-        if success {
-            print("Write to file");
-            file_write(*f, s);
+        f, success := file_open("history.txt", for_writing = true, keep_existing_content=true);
+        if !success {
+            print("Could not write to file history.txt.\n");
+            return;
         }
+        // advance the file pointer to ensure we append to the file instead of overwrite!
+        advance :=  file_length(f);
+        file_set_position(f, advance);
+        s := "new line \n";
+        print("Write to file");
+        file_write(*f, s);
         file_close(*f);
     }
 
@@ -300,12 +294,12 @@ draw_one_frame :: () {
             offset += cursor.pos - cursor_max;
         }
 
-        if mouse_pointer_is_within(text_input_rect) {
-            if mouse_left_just_pressed() {
+        if mouse_left_just_pressed() {
+            if mouse_pointer_is_within(text_input_rect) {
                 request_input.focused = true;
+            } else {
+                request_input.focused = false;
             }
-        } else {
-            request_input.focused = false;
         }
         color := ifx request_input.focused then color_white else color_input;
         draw_rect(text_input_rect, color);
@@ -368,6 +362,36 @@ draw_one_frame :: () {
 
     // Simp.immediate_flush();
     Simp.swap_buffers(the_window);
+}
+
+
+
+set_button :: (id: int, x: float, y: float, w: float, h: float, color: Vector4, label: string) -> Rect {
+    
+    button:Rect = ---; 
+    button.x = x;
+    button.y = y;
+    button.w = w;
+    button.h = h;
+    if mouse_pointer_is_within(button) {
+        ui_state.hot_item = id;
+        print("ui_state.mouse_down  %\n", ui_state.mouse_down); 
+        if ui_state.active_item == 0 && ui_state.mouse_down {
+            ui_state.active_item = id;
+        }
+    } 
+
+    if ui_state.hot_item == id {
+        if ui_state.active_item == id {
+            button = draw_button(xx x, xx y, w, h, color_red, label);
+        } else {
+            button = draw_button(xx x, xx y, w, h, color_white, label);
+        }     
+    } else {
+        button = draw_button(xx x, xx y, w, h, color, label);
+    }
+
+    return button;
 }
 
 
