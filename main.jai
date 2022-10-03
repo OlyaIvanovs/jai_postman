@@ -28,10 +28,13 @@ Rect :: struct {
 color_white : Vector4 = .{1, 1, 1, 1};
 color_red : Vector4 = .{1, 0, 0, 1};
 color_blue : Vector4 = .{0, 0, 1, 1};
+color_green : Vector4 = .{0, 0.49, 0.12, 1};
 color_1 : Vector4 = .{0.33, 0.37, 0.41, 1};
 color_2 : Vector4 = .{0.13, 0.15, 0.18, 1};
 color_3 : Vector4 = .{0.176, 0.2, 0.23, 1};
 color_button : Vector4 = .{0, 0.3, 0.4, 1};
+color_button_hover : Vector4 = .{0, 0.35, 0.47, 1};
+color_button_active : Vector4 = .{0, 0.39, 0.52, 1};
 color_input : Vector4 = .{0.59, 0.59, 0.62, 1};
 color_selection : Vector4 = .{.14, .55, .69, 1};
 color_orange : Vector4 = .{.65, .45, .19, 1};
@@ -87,6 +90,9 @@ UI_State :: struct {
     mouse_x: s64;
     mouse_y: s64;
     mouse_down: bool;
+    mouse_just_pressed: bool;
+    mouse_just_released: bool;
+    pointer_image: Pointer_Image;
 
     hot_item: int;
     active_item: int;
@@ -106,8 +112,11 @@ main :: () {
 
     quit : bool;
     while !quit {
-        ui_state : UI_State = ---;
         Input.update_window_events();
+
+        ui_state.mouse_down = key_state(.MOUSE_BUTTON_LEFT) & .DOWN != 0;
+        ui_state.mouse_just_pressed = key_state(.MOUSE_BUTTON_LEFT) & .START != 0;
+        ui_state.mouse_just_released = key_state(.MOUSE_BUTTON_LEFT) & .END != 0;
 
         frame_time = get_time();
         
@@ -122,11 +131,6 @@ main :: () {
                 quit = true;
             }
 
-            if mouse_left_just_pressed() {
-                print("HERE");
-                ui_state.mouse_down = true;
-            }
-
             if request_input.focused {
                 processed := request_input_process_event(it);
                 if processed continue;
@@ -134,6 +138,12 @@ main :: () {
         }
 
         draw_one_frame();
+
+        // ui_state.hot_last_frame =
+        ui_state.hot_item = 0;
+        ui_state.active_item = 0;
+        ui_state.pointer_image = 0;
+
         sleep_milliseconds(10);
         reset_temporary_storage();
     }
@@ -221,23 +231,24 @@ request_input_process_event :: (event: Input.Event) -> processed: bool {
 draw_one_frame :: () {
     Simp.clear_render_target(.05, .08, .15, 1);
 
-    // Events
-    left_click := Input.input_button_states[Input.Key_Code.MOUSE_BUTTON_LEFT];
-
     // Check mouse position
     update_mouse_pointer();
 
     Simp.set_shader_for_color();
 
-    side_bar, side_bar_header, top_bar, move_bar, bar, rect : Rect;
+    side_bar, side_bar_header, side_bar_scroll, side_bar_scroll_q, top_bar, move_bar, bar, rect : Rect;
     screen = make_rect(0, 0, xx window_width, xx window_height);
     rect, side_bar = cut_left(side_bar_w, screen);
     side_bar, side_bar_header = cut_top(side_bar.h / 10, side_bar);
+    side_bar, side_bar_scroll = cut_right(side_bar.w / 30, side_bar);
+    side_bar_scroll, side_bar_scroll_q = cut_top(side_bar_scroll.h / 30, side_bar_scroll);
     rect, top_bar = cut_top(xx (window_height / 6), rect);
 
     draw_rect(rect, color_1);
     draw_rect(side_bar, color_2);
     draw_rect(side_bar_header, color_2);
+    draw_rect(side_bar_scroll, color_green);
+    draw_rect(side_bar_scroll_q, color_orange);
     draw_rect(top_bar, color_3);
 
     // Sidebar text
@@ -251,12 +262,11 @@ draw_one_frame :: () {
     bar, move_bar = cut_right(5, side_bar);
     move_bar.x += 2; 
     move_bar_hover := expand_x(2, move_bar);
-
     // TODO move move bar!!!!
 
-    // Draw button 
-    claer_button := set_button(132, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.7 * top_bar.h), 120, 40, color_orange, "Clear");
-    button := set_button(122, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
+    // Draw buttons 
+    set_button(132, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.7 * top_bar.h), 120, 40, color_orange, "Clear");
+    set_button(122, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
 
     // Read from file by clicking on button 'Send'
     if ui_state.active_item == 122 {
@@ -266,16 +276,24 @@ draw_one_frame :: () {
             print("Could not write to file history.txt.\n");
             return;
         }
-        // advance the file pointer to ensure we append to the file instead of overwrite!
-        advance :=  file_length(f);
+        advance :=  file_length(f); // advance the file pointer to ensure we append to the file instead of overwrite!
         file_set_position(f, advance);
         s := "new line \n";
-        print("Write to file");
         file_write(*f, s);
         file_close(*f);
     }
 
-    request_type := draw_button(xx (top_bar.x + 0.3 * top_bar.w), xx (top_bar.y + 0.2 * top_bar.h), 120, 40, color_orange, "GET");
+    // Request type
+    set_button(142, (top_bar.x + 0.3 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 40, color_orange, "GET");
+    if ui_state.active_item == 142 || ui_state.active_item == 152{
+/*         dropdown:Rect = ---;
+        dropdown.x = top_bar.x + 0.3 * top_bar.w;
+        dropdown.y = (top_bar.y + 0.2 * top_bar.h) - 100;
+        dropdown.w = 120;
+        dropdown.h = 100;
+        draw_rect(dropdown, color_red); */
+        set_button(152, (top_bar.x + 0.3 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 140, color_orange, "GET&POST");
+    }
 
     // Draw text input
     {
@@ -345,20 +363,20 @@ draw_one_frame :: () {
         }
 
         t := tprint("Status: 200 OK");
-        Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, t, color_button);
+        Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, t, color_green);
+    } 
+
+    // Draw pointer
+    if ui_state.pointer_image == 0 {
+        set_pointer_image(Pointer_Image.ARROW);
     }
 
-    // Check mouse pointer image
-    if mouse_pointer_is_within(button) {
-        set_pointer_image(Pointer_Image.HAND);
-    } else if mouse_pointer_is_within(move_bar) {
+/*         Check mouse pointer image
+    if mouse_pointer_is_within(move_bar) {
         set_pointer_image(Pointer_Image.SLIDE);
-    // } else if mouse_pointer_is_within(text_input_rect) {
-    //     input_focus = true;
-    //     set_pointer_image(Pointer_Image.CURSOR);
-    } else {
-        set_pointer_image(Pointer_Image.ARROW);
-    }  
+    } else if mouse_pointer_is_within(text_input_rect) {
+        input_focus = true;
+        set_pointer_image(Pointer_Image.CURSOR); */
 
     // Simp.immediate_flush();
     Simp.swap_buffers(the_window);
@@ -366,34 +384,33 @@ draw_one_frame :: () {
 
 
 
-set_button :: (id: int, x: float, y: float, w: float, h: float, color: Vector4, label: string) -> Rect {
+set_button :: (id: int, x: float, y: float, w: float, h: float, color: Vector4, label: string) {
     
     button:Rect = ---; 
     button.x = x;
     button.y = y;
     button.w = w;
     button.h = h;
+
     if mouse_pointer_is_within(button) {
+        set_pointer_image(Pointer_Image.HAND);
+        ui_state.pointer_image = Pointer_Image.HAND;
         ui_state.hot_item = id;
-        print("ui_state.mouse_down  %\n", ui_state.mouse_down); 
-        if ui_state.active_item == 0 && ui_state.mouse_down {
+        if ui_state.active_item == 0 && (ui_state.mouse_down || ui_state.mouse_just_pressed) {
             ui_state.active_item = id;
         }
     } 
 
-    if ui_state.hot_item == id {
-        if ui_state.active_item == id {
-            button = draw_button(xx x, xx y, w, h, color_red, label);
-        } else {
-            button = draw_button(xx x, xx y, w, h, color_white, label);
-        }     
+    // Render
+    print("ui state % % \n", ui_state.hot_item, ui_state.active_item);
+    if ui_state.active_item == id {
+        button = draw_button(xx x, xx y, w, h, color_button_active, label);
+    } else if ui_state.hot_item == id {
+        button = draw_button(xx x, xx y, w, h, color_button_hover, label);
     } else {
         button = draw_button(xx x, xx y, w, h, color, label);
     }
-
-    return button;
 }
-
 
 
 

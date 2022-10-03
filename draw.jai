@@ -5,15 +5,8 @@ draw_rect :: (r: Rect, color: Vector4) {
 }
 
 draw_button :: (x: float, y: float, width: float, height: float, color: Vector4, text: string) -> Rect { 
-    left_click := Input.input_button_states[Input.Key_Code.MOUSE_BUTTON_LEFT];
     button := make_rect(x, y, width, height);
-    
-    // Check if mouse click is over button
-    if left_click && mouse_pointer_is_within(button) {
-        draw_rect(button, color_white);
-    } else {
-        draw_rect(button, color);
-    }
+    draw_rect(button, color);
 
     // Label
     text_width := Simp.prepare_text(the_font, text);
