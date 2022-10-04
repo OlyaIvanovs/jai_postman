@@ -53,11 +53,11 @@ Pointer_Image :: enum u16 {
 }
 pointers: [NUM_POINTERS] Cursor;
 
-side_bar_w : float;
 frame_time: float64;
 request_input: Text_Input;
 response_field: Response_Field;
 ui_state : UI_State;
+dropdown: Dropdown;
 
 Text_Input :: struct {
     text: [..] u8;
@@ -86,6 +86,11 @@ Response_Field :: struct {
     };
 }
 
+Dropdown :: struct {
+    value: string;
+    is_open: bool;
+}
+
 UI_State :: struct {
     mouse_x: s64;
     mouse_y: s64;
@@ -98,6 +103,16 @@ UI_State :: struct {
     active_item: int;
 }
 
+Request_Type :: enum {
+        GET      :: 1;
+        POST     :: 2;
+        PUT      :: 3;
+        PATCH    :: 4;
+        DELETE   :: 5;
+}
+
+
+
 
 main :: () {
     the_window = create_window(window_width, window_height, "MY POSTMAN", background_color_rgb =  float.[.55,.01,.9]);
@@ -108,7 +123,6 @@ main :: () {
     init_font();
     init_pointer_images();
     set_pointer_image(Pointer_Image.ARROW);
-    side_bar_w = xx (window_width / 5);   
 
     quit : bool;
     while !quit {
@@ -238,7 +252,7 @@ draw_one_frame :: () {
 
     side_bar, side_bar_header, side_bar_scroll, side_bar_scroll_q, top_bar, move_bar, bar, rect : Rect;
     screen = make_rect(0, 0, xx window_width, xx window_height);
-    rect, side_bar = cut_left(side_bar_w, screen);
+    rect, side_bar = cut_left(xx (window_width / 5), screen);
     side_bar, side_bar_header = cut_top(side_bar.h / 10, side_bar);
     side_bar, side_bar_scroll = cut_right(side_bar.w / 30, side_bar);
     side_bar_scroll, side_bar_scroll_q = cut_top(side_bar_scroll.h / 30, side_bar_scroll);
@@ -283,17 +297,6 @@ draw_one_frame :: () {
         file_close(*f);
     }
 
-    // Request type
-    set_button(142, (top_bar.x + 0.3 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 40, color_orange, "GET");
-    if ui_state.active_item == 142 || ui_state.active_item == 152{
-/*         dropdown:Rect = ---;
-        dropdown.x = top_bar.x + 0.3 * top_bar.w;
-        dropdown.y = (top_bar.y + 0.2 * top_bar.h) - 100;
-        dropdown.w = 120;
-        dropdown.h = 100;
-        draw_rect(dropdown, color_red); */
-        set_button(152, (top_bar.x + 0.3 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 140, color_orange, "GET&POST");
-    }
 
     // Draw text input
     {
@@ -366,6 +369,45 @@ draw_one_frame :: () {
         Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, t, color_green);
     } 
 
+    // Dropdown: Request type
+    {
+        request_types :: Request_Type.[.GET, .POST, .PUT, .PATCH, .DELETE];
+        val := tprint("%", dropdown.value);
+        if val == "" then val = "GET";
+
+        if dropdown.is_open {
+            set_button(142, (top_bar.x + 0.3 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 40, color_orange, val);
+            drop:Rect = ---;
+            drop.x = top_bar.x + 0.3 * top_bar.w;
+            drop.y = (top_bar.y + 0.2 * top_bar.h) - 150;
+            drop.w = 120;
+            drop.h = 150;
+            draw_rect(drop, color_red);
+
+            diff := 0;      
+            for request_types {
+                d := drop;
+                d.y += diff;
+                d.h = 30;
+                if mouse_pointer_is_within(d) && ui_state.mouse_just_pressed {
+                    dropdown.value = copy_string(tprint("%", it));
+                    draw_rect(d, color_green);
+                } else if mouse_pointer_is_within(d) || tprint("%", it) == val {
+                    draw_rect(d, color_orange);
+                } 
+                    
+                Simp.draw_text(the_font, xx (d.x + 5), xx (d.y + (d.h / 2) ), tprint("%", it));  
+                diff += 30;        
+            } 
+        } else {
+            set_button(142, (top_bar.x + 0.3 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 40, color_orange, val);
+        }
+
+        if ui_state.active_item == 142 {
+            dropdown.is_open = true;
+        }
+    }
+
     // Draw pointer
     if ui_state.pointer_image == 0 {
         set_pointer_image(Pointer_Image.ARROW);
@@ -401,8 +443,6 @@ set_button :: (id: int, x: float, y: float, w: float, h: float, color: Vector4, 
         }
     } 
 
-    // Render
-    print("ui state % % \n", ui_state.hot_item, ui_state.active_item);
     if ui_state.active_item == id {
         button = draw_button(xx x, xx y, w, h, color_button_active, label);
     } else if ui_state.hot_item == id {
