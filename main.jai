@@ -111,6 +111,8 @@ Request_Type :: enum {
         DELETE   :: 5;
 }
 
+scroll_y: s64;
+
 
 
 
@@ -254,22 +256,46 @@ draw_one_frame :: () {
     screen = make_rect(0, 0, xx window_width, xx window_height);
     rect, side_bar = cut_left(xx (window_width / 5), screen);
     side_bar, side_bar_header = cut_top(side_bar.h / 10, side_bar);
-    side_bar, side_bar_scroll = cut_right(side_bar.w / 30, side_bar);
-    side_bar_scroll, side_bar_scroll_q = cut_top(side_bar_scroll.h / 30, side_bar_scroll);
     rect, top_bar = cut_top(xx (window_height / 6), rect);
 
     draw_rect(rect, color_1);
     draw_rect(side_bar, color_2);
     draw_rect(side_bar_header, color_2);
-    draw_rect(side_bar_scroll, color_green);
-    draw_rect(side_bar_scroll_q, color_orange);
     draw_rect(top_bar, color_3);
 
     // Sidebar text
     t := tprint("Requests:");
     Simp.draw_text(the_font, xx (side_bar_header.x + 10), xx (side_bar_header.y + side_bar_header.h * 0.3), t, color_orange);
     text_from_file := read_entire_file("history.txt");
-    draw_formatted_text(text_from_file, shrink(10, side_bar), color_orange);
+    k := draw_formatted_text(text_from_file, shrink(10, side_bar), color_orange);
+
+    // Scroll ID 162
+    side_bar, side_bar_scroll = cut_right(side_bar.w / 30, side_bar);
+    side_bar_scroll, side_bar_scroll_q = cut_top(side_bar_scroll.h * side_bar_scroll.h  / k , side_bar_scroll);
+    draw_rect(side_bar_scroll, color_green);
+
+    {
+        id := 162;
+        if mouse_pointer_is_within(side_bar_scroll_q) {
+            set_pointer_image(Pointer_Image.HAND);
+            ui_state.pointer_image = Pointer_Image.HAND;
+            ui_state.hot_item = id;
+            if ui_state.active_item == 0 && (ui_state.mouse_down || ui_state.mouse_just_pressed) {
+                scroll_y = ui_state.mouse_y; 
+                ui_state.active_item = id;
+            }
+        } 
+
+        if ui_state.active_item == id || ui_state.hot_item == id {
+            draw_rect(side_bar_scroll_q, color_button);
+        } else {
+            draw_rect(side_bar_scroll_q, color_orange);
+        } 
+
+        if ui_state.active_item == id {
+            // TODO!
+        }
+    }
 
 
     // Draw move bar
@@ -283,7 +309,7 @@ draw_one_frame :: () {
     set_button(122, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
 
     // Read from file by clicking on button 'Send'
-    if ui_state.active_item == 122 {
+    if ui_state.active_item == 122 && ui_state.mouse_just_pressed {
         response_field.show = true;
         f, success := file_open("history.txt", for_writing = true, keep_existing_content=true);
         if !success {
@@ -392,6 +418,7 @@ draw_one_frame :: () {
                 if mouse_pointer_is_within(d) && ui_state.mouse_just_pressed {
                     dropdown.value = copy_string(tprint("%", it));
                     draw_rect(d, color_green);
+                    dropdown.is_open = false;
                 } else if mouse_pointer_is_within(d) || tprint("%", it) == val {
                     draw_rect(d, color_orange);
                 } 
