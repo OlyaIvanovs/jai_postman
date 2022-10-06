@@ -111,7 +111,7 @@ Request_Type :: enum {
         DELETE   :: 5;
 }
 
-scroll_y: s64;
+scroll_y: float;
 
 
 
@@ -157,9 +157,10 @@ main :: () {
 
         // ui_state.hot_last_frame =
         ui_state.hot_item = 0;
-        ui_state.active_item = 0;
         ui_state.pointer_image = 0;
-
+        if !ui_state.mouse_down {
+            ui_state.active_item = 0;
+        }
         sleep_milliseconds(10);
         reset_temporary_storage();
     }
@@ -252,16 +253,14 @@ draw_one_frame :: () {
 
     Simp.set_shader_for_color();
 
-    side_bar, side_bar_header, side_bar_scroll, side_bar_scroll_q, top_bar, move_bar, bar, rect : Rect;
+    side_bar, side_bar_header, side_bar_scroll, scroll_slider, top_bar, move_bar, bar, rect : Rect;
     screen = make_rect(0, 0, xx window_width, xx window_height);
     rect, side_bar = cut_left(xx (window_width / 5), screen);
     side_bar, side_bar_header = cut_top(side_bar.h / 10, side_bar);
     rect, top_bar = cut_top(xx (window_height / 6), rect);
 
-    draw_rect(rect, color_1);
     draw_rect(side_bar, color_2);
     draw_rect(side_bar_header, color_2);
-    draw_rect(top_bar, color_3);
 
     // Sidebar text
     t := tprint("Requests:");
@@ -269,33 +268,15 @@ draw_one_frame :: () {
     text_from_file := read_entire_file("history.txt");
     k := draw_formatted_text(text_from_file, shrink(10, side_bar), color_orange);
 
-    // Scroll ID 162
     side_bar, side_bar_scroll = cut_right(side_bar.w / 30, side_bar);
-    side_bar_scroll, side_bar_scroll_q = cut_top(side_bar_scroll.h * side_bar_scroll.h  / k , side_bar_scroll);
-    draw_rect(side_bar_scroll, color_green);
+    scroll_slider = side_bar_scroll;
+    scroll_slider.h = side_bar_scroll.h * side_bar_scroll.h  / k ;
+    draw_rect(side_bar_scroll, color_2);    
+    set_slider(162, scroll_slider, side_bar_scroll.h - scroll_slider.h);
 
-    {
-        id := 162;
-        if mouse_pointer_is_within(side_bar_scroll_q) {
-            set_pointer_image(Pointer_Image.HAND);
-            ui_state.pointer_image = Pointer_Image.HAND;
-            ui_state.hot_item = id;
-            if ui_state.active_item == 0 && (ui_state.mouse_down || ui_state.mouse_just_pressed) {
-                scroll_y = ui_state.mouse_y; 
-                ui_state.active_item = id;
-            }
-        } 
 
-        if ui_state.active_item == id || ui_state.hot_item == id {
-            draw_rect(side_bar_scroll_q, color_button);
-        } else {
-            draw_rect(side_bar_scroll_q, color_orange);
-        } 
-
-        if ui_state.active_item == id {
-            // TODO!
-        }
-    }
+    draw_rect(rect, color_1);
+    draw_rect(top_bar, color_3);
 
 
     // Draw move bar
@@ -303,26 +284,6 @@ draw_one_frame :: () {
     move_bar.x += 2; 
     move_bar_hover := expand_x(2, move_bar);
     // TODO move move bar!!!!
-
-    // Draw buttons 
-    set_button(132, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.7 * top_bar.h), 120, 40, color_orange, "Clear");
-    set_button(122, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
-
-    // Read from file by clicking on button 'Send'
-    if ui_state.active_item == 122 && ui_state.mouse_just_pressed {
-        response_field.show = true;
-        f, success := file_open("history.txt", for_writing = true, keep_existing_content=true);
-        if !success {
-            print("Could not write to file history.txt.\n");
-            return;
-        }
-        advance :=  file_length(f); // advance the file pointer to ensure we append to the file instead of overwrite!
-        file_set_position(f, advance);
-        s := "new line \n";
-        file_write(*f, s);
-        file_close(*f);
-    }
-
 
     // Draw text input
     {
@@ -377,6 +338,26 @@ draw_one_frame :: () {
         // TEXT
         visible_text := slice(to_string(text), request_input.offset, request_input.capacity); 
         Simp.draw_text(the_font, xx (text_input_rect.x + 10), xx text_input_rect.y + 10, visible_text, color_button);
+    }
+
+    // Draw buttons 
+    set_button(132, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.7 * top_bar.h), 120, 40, color_orange, "Clear");
+    set_button(122, (top_bar.x + 0.9 * top_bar.w), (top_bar.y + 0.2 * top_bar.h), 120, 40, color_button, "Send");
+
+    // Read from file by clicking on button 'Send'
+    if ui_state.active_item == 122 && ui_state.mouse_just_pressed {
+        response_field.show = true;
+        f, success := file_open("history.txt", for_writing = true, keep_existing_content=true);
+        if !success {
+            print("Could not write to file history.txt.\n");
+            return;
+        }
+        advance :=  file_length(f); // advance the file pointer to ensure we append to the file instead of overwrite!
+        file_set_position(f, advance);
+        s := to_string(request_input.text);
+        file_write(*f, s);
+        file_write(*f, "\n");
+        file_close(*f);
     }
 
 
@@ -477,6 +458,33 @@ set_button :: (id: int, x: float, y: float, w: float, h: float, color: Vector4, 
     } else {
         button = draw_button(xx x, xx y, w, h, color, label);
     }
+}
+
+
+set_slider :: (id: int, slider: Rect, max_ypos: float) {
+
+    s := slider;
+
+    if mouse_pointer_is_within(s) {
+        set_pointer_image(Pointer_Image.HAND);
+        ui_state.pointer_image = Pointer_Image.HAND;
+        ui_state.hot_item = id;
+        if ui_state.active_item == 0 && (ui_state.mouse_down || ui_state.mouse_just_pressed) {
+            ui_state.active_item = id;
+            print("Active item %", ui_state.active_item);
+        print("Hot item %\n", ui_state.hot_item);
+        }
+    } 
+
+    if ui_state.active_item == id {
+        s.y = clamp(mouse_pointer.y, 0, max_ypos);
+    }
+
+    if ui_state.active_item == id || ui_state.hot_item == id {
+        draw_rect(s, color_button);
+    } else {
+        draw_rect(s, color_orange);
+    } 
 }
 
 
