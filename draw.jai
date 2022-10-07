@@ -16,12 +16,26 @@ draw_button :: (x: float, y: float, width: float, height: float, color: Vector4,
 }
 
 
-draw_formatted_text :: (text: string, rect: Rect, color: Vector4) -> s64 {
+draw_formatted_text :: (text: string, rect: Rect, color: Vector4, width: int = 0, scroll_top: int = 0) -> s64 {
     lines := split(text , "\n");
-    k := 0;
+    k := 0; // to calculate height of text block
     for lines {
-        Simp.draw_text(the_font, xx (rect.x + 10), xx (rect.y + rect.h - 20 - k), it, color);
-        k += 20;
+        w := width;
+        l := it;
+        if w == 0 then w = l.count;
+        x_max := cast(int) (floor(cast(float) (l.count / w)));
+        x := 0;
+        while x <= x_max && l.count - w * x != 0 {
+            b := copy_string(l);
+            b.data += w * x;
+            b.count = min(w, l.count - w * x);
+
+            Simp.draw_text(the_font, xx (rect.x + 10), xx (rect.y + rect.h - 20 - k), b, color);
+
+            k += cast(int) (char_size.y * 1.2);
+            x += 1;
+        }
+        k += cast(int) (char_size.y * 1.2);
     }
     return k;
-}
+} 

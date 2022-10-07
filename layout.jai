@@ -42,6 +42,17 @@ cut_top :: (cut: float, rect: Rect) -> (remainder: Rect, top: Rect) {
     return remainder, top;
 }
 
+cut_bottom :: (cut: float, rect: Rect) -> (remainder: Rect, bottom: Rect) {
+    remainder := rect;
+    remainder.h -= cut;
+    remainder.y += cut;
+
+    bottom := rect;
+    bottom.h = cut;
+
+    return remainder, bottom;
+}
+
 
 expand_x :: (expand: float, rect: Rect) -> (r: Rect) {
     r := rect;

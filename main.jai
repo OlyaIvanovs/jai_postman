@@ -41,6 +41,7 @@ color_orange : Vector4 = .{.65, .45, .19, 1};
 
 the_font : *Simp.Dynamic_Font;
 char_size: Vector2;
+line_height: int;
 
 // Pointers
 mouse_pointer: Vector2;
@@ -253,27 +254,29 @@ draw_one_frame :: () {
 
     Simp.set_shader_for_color();
 
-    side_bar, side_bar_header, side_bar_scroll, scroll_slider, top_bar, move_bar, bar, rect : Rect;
+    side_bar, side_bar_header, side_bar_header_outline, side_bar_scroll, scroll_slider, top_bar, move_bar, bar, rect : Rect;
     screen = make_rect(0, 0, xx window_width, xx window_height);
     rect, side_bar = cut_left(xx (window_width / 5), screen);
     side_bar, side_bar_header = cut_top(side_bar.h / 10, side_bar);
+    side_bar_header, side_bar_header_outline = cut_bottom(side_bar_header.h * 0.05, side_bar_header);
     rect, top_bar = cut_top(xx (window_height / 6), rect);
 
     draw_rect(side_bar, color_2);
     draw_rect(side_bar_header, color_2);
+    draw_rect(side_bar_header_outline, color_3);
 
     // Sidebar text
-    t := tprint("Requests:");
+    t := tprint("HISTORY:");
     Simp.draw_text(the_font, xx (side_bar_header.x + 10), xx (side_bar_header.y + side_bar_header.h * 0.3), t, color_orange);
     text_from_file := read_entire_file("history.txt");
-    k := draw_formatted_text(text_from_file, shrink(10, side_bar), color_orange);
+    width := cast(int) (shrink(10, side_bar).w / char_size.x);
+    k := draw_formatted_text(text_from_file, shrink(10, side_bar), color_orange, 25); // WIDTH!
 
     side_bar, side_bar_scroll = cut_right(side_bar.w / 30, side_bar);
     scroll_slider = side_bar_scroll;
     scroll_slider.h = side_bar_scroll.h * side_bar_scroll.h  / k ;
     draw_rect(side_bar_scroll, color_2);    
     set_slider(162, scroll_slider, side_bar_scroll.h - scroll_slider.h);
-
 
     draw_rect(rect, color_1);
     draw_rect(top_bar, color_3);
@@ -389,16 +392,16 @@ draw_one_frame :: () {
             drop.y = (top_bar.y + 0.2 * top_bar.h) - 150;
             drop.w = 120;
             drop.h = 150;
-            draw_rect(drop, color_red);
+            draw_rect(drop, color_2);
 
             diff := 0;      
-            for request_types {
+            for request_types {  // Dropdown options
                 d := drop;
                 d.y += diff;
                 d.h = 30;
                 if mouse_pointer_is_within(d) && ui_state.mouse_just_pressed {
                     dropdown.value = copy_string(tprint("%", it));
-                    draw_rect(d, color_green);
+                    draw_rect(d, color_orange);
                     dropdown.is_open = false;
                 } else if mouse_pointer_is_within(d) || tprint("%", it) == val {
                     draw_rect(d, color_orange);
@@ -478,6 +481,9 @@ set_slider :: (id: int, slider: Rect, max_ypos: float) {
 
     if ui_state.active_item == id {
         s.y = clamp(mouse_pointer.y, 0, max_ypos);
+        scroll_y = s.y;
+    } else {
+        s.y = scroll_y;
     }
 
     if ui_state.active_item == id || ui_state.hot_item == id {
