@@ -313,7 +313,7 @@ draw_one_frame :: () {
             }
         }
         color := ifx request_input.focused then color_white else color_input;
-        draw_rect(text_input_rect, color);
+        draw_rounded_rect (text_input_rect, color, 4);
 
         // Cursor animation
         num_frame := cast(int) (frame_time / request_input.cursor.BLINKING_SPEED);
@@ -367,7 +367,7 @@ draw_one_frame :: () {
     // Draw response field
     {
         text_input_rect := make_rect(rect.x + 0.1 * rect.w, rect.y + 0.1 * rect.h, 0.8 * rect.w, 0.8 * rect.h);
-        draw_rect(text_input_rect, color_input);
+        draw_rounded_rect(text_input_rect, color_input, 4);
 
         // Read from file by clicking on button 'Send'
         if response_field.show {
@@ -474,8 +474,6 @@ set_slider :: (id: int, slider: Rect, max_ypos: float) {
         ui_state.hot_item = id;
         if ui_state.active_item == 0 && (ui_state.mouse_down || ui_state.mouse_just_pressed) {
             ui_state.active_item = id;
-            print("Active item %", ui_state.active_item);
-        print("Hot item %\n", ui_state.hot_item);
         }
     } 
 
@@ -487,9 +485,9 @@ set_slider :: (id: int, slider: Rect, max_ypos: float) {
     }
 
     if ui_state.active_item == id || ui_state.hot_item == id {
-        draw_rect(s, color_button);
+        draw_rounded_rect(s, color_button, 4);
     } else {
-        draw_rect(s, color_orange);
+        draw_rounded_rect(s, color_orange, 4);
     } 
 }
 

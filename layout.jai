@@ -37,7 +37,7 @@ cut_top :: (cut: float, rect: Rect) -> (remainder: Rect, top: Rect) {
 
     top := rect;
     top.h = cut;
-    top.y = rect.h - cut;
+    top.y += rect.h - cut;
 
     return remainder, top;
 }
