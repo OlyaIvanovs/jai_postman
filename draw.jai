@@ -6,7 +6,7 @@ draw_rect :: (r: Rect, color: Vector4) {
 
 draw_button :: (x: float, y: float, width: float, height: float, color: Vector4, text: string) -> Rect { 
     button := make_rect(x, y, width, height);
-    draw_rounded_rect(button, color, 4);
+    draw_rounded_rect(button, color, 10);
 
     // Label
     text_width := Simp.prepare_text(the_font, text);
@@ -29,43 +29,68 @@ draw_rounded_rect :: (rect: Rect, color: Vector4, radius: int) {
     draw_rect(top, color);
     draw_rect(bottom, color);
 
-    base: Vector2 = ---;
-    points : [7]Vector2;
 
-    // Top left corner
-    base.x = top.x;
-    base.y = top.y;
-    k := float.[.5, .55, .65, .75, .85, .95, 1];
-    for i : 0..6 {
-        points[i].x = base.x + cos(PI * k[i])*radius;
-        points[i].y = base.y + sin(PI * k[i])*radius;
-    }
-    Simp.immediate_triangle_fan(base, points, color); 
+    draw_corner :: (base: Vector2, color: Vector4, angle_start: float, angle_end: float, radius: float) {
+        NUM_SECTORS :: 8;
+        points: [NUM_SECTORS + 1] Vector2;
 
-    // Top right corner
-    base.x = top.x + top.w;
-    for i : 0..6 {
-        points[i].x = base.x + cos(PI * (k[i] - .5))*radius;
-        points[i].y = base.y + sin(PI * (k[i] - .5))*radius;
-    }
-    Simp.immediate_triangle_fan(base, points, color); 
+        step := (angle_end - angle_start) / NUM_SECTORS;
+        angle := angle_start;
 
-    // Bottom left corner
-    base.x = bottom.x;
-    base.y = bottom.y + bottom.h;
-    for i : 0..6 {
-        points[i].x = base.x + cos(PI * (k[i] + .5))*radius;
-        points[i].y = base.y + sin(PI * (k[i] + .5))*radius;
-    }
-    Simp.immediate_triangle_fan(base, points, color); 
+        for i : 0..NUM_SECTORS {
+            
+            // points[i].x = base.x + cos(angle) * radius
+            // points[i].y =     
 
-    // Bottom right corner
-    base.x = bottom.x + bottom.w;
-    for i : 0..6 {
-        points[i].x = base.x + cos(PI*(k[i] - 1))*radius;
-        points[i].y = base.y + sin(PI*(k[i] - 1))*radius;
+            point := make_vector2(cos(angle), sin(angle));
+            points[i] = base + point * radius;
+            angle += step;
+        } 
+
+        Simp.immediate_triangle_fan(base, points, color); 
     }
-    Simp.immediate_triangle_fan(base, points, color);
+
+    draw_corner(make_vector2(top.x, top.y),                             color, PI/2,   PI,     xx radius);
+    draw_corner(make_vector2(top.x + top.w, top.y),                     color, 0,      PI/2,   xx radius);
+    draw_corner(make_vector2(bottom.x, bottom.y + bottom.h),            color, PI,     3*PI/2, xx radius);
+    draw_corner(make_vector2(bottom.x + bottom.w, bottom.y + bottom.h), color, 3*PI/2, 2*PI,   xx radius);
+
+    // points : [7]Vector2;
+
+    // // Top left corner
+    // base.x = top.x;
+    // base.y = top.y;
+    // k := float.[.5, .55, .65, .75, .85, .95, 1];
+    // for i : 0..6 {
+    //     points[i].x = base.x + cos(PI * k[i])*radius;
+    //     points[i].y = base.y + sin(PI * k[i])*radius;
+    // }
+    // Simp.immediate_triangle_fan(base, points, color); 
+
+    // // Top right corner
+    // base.x = top.x + top.w;
+    // for i : 0..6 {
+    //     points[i].x = base.x + cos(PI * (k[i] - .5))*radius;
+    //     points[i].y = base.y + sin(PI * (k[i] - .5))*radius;
+    // }
+    // Simp.immediate_triangle_fan(base, points, color); 
+
+    // // Bottom left corner
+    // base.x = bottom.x;
+    // base.y = bottom.y + bottom.h;
+    // for i : 0..6 {
+    //     points[i].x = base.x + cos(PI * (k[i] + .5))*radius;
+    //     points[i].y = base.y + sin(PI * (k[i] + .5))*radius;
+    // }
+    // Simp.immediate_triangle_fan(base, points, color); 
+
+    // // Bottom right corner
+    // base.x = bottom.x + bottom.w;
+    // for i : 0..6 {
+    //     points[i].x = base.x + cos(PI*(k[i] - 1))*radius;
+    //     points[i].y = base.y + sin(PI*(k[i] - 1))*radius;
+    // }
+    // Simp.immediate_triangle_fan(base, points, color);
     
 }
 
